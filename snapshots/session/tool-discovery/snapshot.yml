@@ -1,0 +1,9 @@
+version: 1
+scenario: tool-discovery
+profile: headless
+composition: tool-discovery
+recording: authored
+header:
+  class: tool-discovery
+  pin: true
+  changes: 1

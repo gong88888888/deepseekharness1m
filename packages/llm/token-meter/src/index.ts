@@ -137,7 +137,7 @@ export class TokenMeter extends Service {
    *
    * `requestHeader` replaces the latest logged envelope for pressure and node
    * pricing; the node set always describes the current session surface. Every
-   * call clones those positional nodes, so measurement is O(surface).
+   * call allocates detached positional nodes once, so measurement is O(surface).
    *
    * @param session - session to replay through its current durable tail.
    * @param requestHeader - optional effective request envelope replacing the latest logged header.
@@ -166,7 +166,7 @@ export class TokenMeter extends Service {
       // Signed heuristic deltas remain conservative only from an anchor
       // that is at least as large as the matching full heuristic price.
       baseline = usage !== undefined && usageTokens(usage) >= estimatedAnchorTokens
-        ? { kind: 'usage', tokens: usageTokens(usage), usage }
+        ? { kind: 'usage', tokens: usageTokens(usage), usage: structuredClone(usage) }
         : { kind: 'estimated', tokens: estimatedAnchorTokens }
       surfaceDeltaTokens = surface.surfaceTokens - anchorSurfaceTokens
     } else if (header === undefined && surface.surfaceTokens === 0) {
@@ -180,14 +180,14 @@ export class TokenMeter extends Service {
       surfaceDeltaTokens = 0
     }
 
-    return deepFreeze(structuredClone({
+    return deepFreeze({
       logRevision: state.consumedEvents,
       baseline,
       surfaceDeltaTokens,
       totalTokens: Math.max(0, baseline.tokens + surfaceDeltaTokens),
       surfaceTokens: surface.surfaceTokens,
       nodes: surface.nodes,
-    }))
+    })
   }
 
   /** Resolve the routed model's image pricing, when the llm service and route declare one. */

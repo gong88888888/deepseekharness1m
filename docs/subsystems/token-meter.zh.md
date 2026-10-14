@@ -83,7 +83,7 @@ Replay owner for one service-wide estimator and isolated per-session folds.
  *
  * `requestHeader` replaces the latest logged envelope for pressure and node
  * pricing; the node set always describes the current session surface. Every
- * call clones those positional nodes, so measurement is O(surface).
+ * call allocates detached positional nodes once, so measurement is O(surface).
  *
  * @param session - session to replay through its current durable tail.
  * @param requestHeader - optional effective request envelope replacing the latest logged header.

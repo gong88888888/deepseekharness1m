@@ -4,5 +4,6 @@
   name: '@deepseek-ai/dsh-compaction-basic'
   config:
     thresholdRatio: 0.99
+    headroomTokens: 32
     retainTokens: 20
     maxTokens: 32

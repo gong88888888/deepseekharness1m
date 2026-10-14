@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-10-long-context-local-capacity-ladder.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/testing/2026-09-10-long-context-local-capacity-ladder.md
+/agent-note-local-long-context-capacity-measurements:
+  en: 0e613223f2784150
+  zh: db745896bcce8d9d
+/agent-note-local-long-context-capacity-measurements/problem:
+  en: 8c85847cd3b66505
+  zh: 4979b9f2fd03ab40
+/agent-note-local-long-context-capacity-measurements/decision:
+  en: ad524595572948f7
+  zh: 0859133dc0ed3b8a
+/agent-note-local-long-context-capacity-measurements/alternatives-considered:
+  en: a74804946b814780
+  zh: f3b7f3dfa7e4f3b4
+/agent-note-local-long-context-capacity-measurements/consequences:
+  en: e959c5cb1912dd97
+  zh: 58ad22eedbea5e48

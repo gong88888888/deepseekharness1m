@@ -81,6 +81,10 @@ schema 校验会在执行前拒绝缺失或非数组的 `queries` 字段、非�
 
 -----
 
+### 效率控制
+
+`fetchContext: true` 返回有上限的 Markdown 字符窗口，并附带抓取时间、缓存命中状态和续读位置。偏移按 UTF-16 代码单元计数。`fetchContextChars` 设置默认及最大窗口；`offset` 和 `limit` 指定范围。续读必须使用仍保留的页面版本：过期或淘汰会报错，避免拼接不同版本。`refresh: true` 从零偏移重新抓取。供应商和转换阶段的源内容上限仍然存在；分页能恢复保留的转换内容，不能恢复供应商已省略的字节。
+
 <a id="understand-the-implementation"></a>
 ## 理解实现
 

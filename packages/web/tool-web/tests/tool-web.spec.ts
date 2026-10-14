@@ -55,6 +55,61 @@ async function mountTools(opts: {
 }
 
 describe('search formatting', () => {
+  it('checks provider availability on cache hits and invalidates a replaced provider', async () => {
+    const { ctx, call } = await mountTools({ config: { fetchContext: true, fetchContextChars: 3 } })
+    let available = true
+    const remove = ctx.web.registerFetchProvider({ id: 'replaceable', available: () => available,
+      fetch: () => Promise.resolve({ url: 'https://a.test', statusCode: 200, body: { kind: 'text', content: 'abcdef' }, truncated: false }) })
+    expect((await call('web_fetch', { url: 'https://a.test' })).isError).toBe(false)
+    available = false
+    expect((await call('web_fetch', { url: 'https://a.test' })).isError).toBe(true)
+    remove()
+    ctx.web.registerFetchProvider({ id: 'replaceable', available: () => true,
+      fetch: () => Promise.resolve({ url: 'https://a.test', statusCode: 200, body: { kind: 'text', content: 'new' }, truncated: false }) })
+    expect((await call('web_fetch', { url: 'https://a.test', offset: 3 })).isError).toBe(true)
+    const result = await call('web_fetch', { url: 'https://a.test' })
+    expect(JSON.stringify(result.content)).toContain('new')
+  })
+
+  it('reuses normalized searches with explicit freshness and refresh', async () => {
+    const search = vi.fn().mockResolvedValue({ sources: [{ url: 'https://a.test' }], truncated: false })
+    const { call } = await mountTools({ config: { searchCache: true }, search: { id: 'cache-test', available: () => true, search } })
+    const first = await call('web_search', { queries: [' topic ', 'topic'] })
+    const second = await call('web_search', { queries: ['topic'] })
+    expect(first.isError).toBe(false)
+    expect(JSON.stringify(second.content)).toContain('cache hit')
+    expect(search).toHaveBeenCalledTimes(1)
+    await call('web_search', { queries: ['topic'], refresh: true })
+    expect(search).toHaveBeenCalledTimes(2)
+  })
+
+  it('reads cached page windows without losing characters and refuses expired continuation', async () => {
+    const fetch = vi.fn().mockResolvedValue({ url: 'https://a.test', statusCode: 200,
+      body: { kind: 'text', content: 'abcdef' }, truncated: false })
+    let now = 1000
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    try {
+      const { call } = await mountTools({ config: { fetchContext: true, fetchContextChars: 3, cacheTtlMs: 100 },
+        fetchProvider: { id: 'cache-fetch', available: () => true, fetch } })
+      const first = await call('web_fetch', { url: 'https://a.test' })
+      const second = await call('web_fetch', { url: 'https://a.test', offset: 3 })
+      expect(first.isError).toBe(false)
+      expect(JSON.stringify(first.content)).toContain('abc')
+      expect(JSON.stringify(second.content)).toContain('def')
+      expect(JSON.stringify(second.content)).toContain('cache hit')
+      expect(fetch).toHaveBeenCalledTimes(1)
+      now += 100
+      expect((await call('web_fetch', { url: 'https://a.test', offset: 3 })).isError).toBe(true)
+      expect(fetch).toHaveBeenCalledTimes(1)
+      expect((await call('web_fetch', { url: 'https://a.test', refresh: true })).isError).toBe(false)
+      expect(fetch).toHaveBeenCalledTimes(2)
+      expect((await call('web_fetch', { url: 'https://a.test', limit: 4 })).isError).toBe(true)
+      expect((await call('web_fetch', { url: 'https://a.test', offset: 3, refresh: true })).isError).toBe(true)
+    } finally {
+      clock.mockRestore()
+    }
+  })
+
   it('renders content, sources with titles/hostnames, snippets, and a citation reminder', () => {
     const out = formatSearchOutput({
       content: 'an answer', truncated: false,

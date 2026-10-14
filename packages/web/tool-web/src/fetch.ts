@@ -13,6 +13,15 @@ import type { GenericCallView, ToolResult, WebFetchResultView } from '@deepseek-
 import type { WebFetchBody, WebFetchResult } from '@deepseek-ai/dsh-web'
 import { assertNever, type JsonValue } from '@deepseek-ai/dsh-util-values'
 import { EXTERNAL_WEB_CONTENT_NOTICE } from './trust.ts'
+import { ResultCache, type CacheLimits } from './result-cache.ts'
+
+/** Opt-in cached Markdown windows, measured in UTF-16 code units. */
+export interface FetchContextOptions {
+  /** Retention bounds per caller. */
+  cache: CacheLimits
+  /** Default and maximum Markdown characters returned per request. */
+  chars: number
+}
 
 /**
  * The shared HTML→markdown converter: turndown over its bundled domino DOM,
@@ -443,8 +452,10 @@ export function presentFetchResult(args: { url: string }, result: ToolResult): W
  *   `ToolDefinition.timeoutMs` for `@deepseek-ai/dsh-tool-call-timeout-policy` to enforce.
  * @param maxOutputChars - cap on the complete rendered tool output (see
  *   {@link formatFetchOutput}) and on source characters converted synchronously.
+ * @param context - optional caller-local cache and Markdown window limits.
  */
-export function applyWebFetchTool(ctx: Context, timeoutMs: number, maxOutputChars: number): void {
+export function applyWebFetchTool(ctx: Context, timeoutMs: number, maxOutputChars: number, context?: FetchContextOptions): void {
+  const cache = context === undefined ? undefined : new ResultCache<WebFetchResult>(context.cache)
   ctx.systemPrompt.section({
     name: 'tool:web_fetch',
     order: ctx.systemPrompt.getSectionOrder('TOOL_WEB_FETCH'),
@@ -458,6 +469,11 @@ export function applyWebFetchTool(ctx: Context, timeoutMs: number, maxOutputChar
     description: 'Fetch the content of a specific HTTP(S) URL and return it decoded to text.',
     parameters: {
       url: { type: 'string', required: true, description: 'The HTTP(S) URL to fetch.' },
+      ...context === undefined ? {} : {
+        offset: { type: 'integer' as const, description: 'Zero-based Markdown character offset (UTF-16). Later windows require the retained version from an earlier fetch.' },
+        limit: { type: 'integer' as const, description: `Maximum Markdown characters to return, up to ${context.chars}.` },
+        refresh: { type: 'boolean' as const, description: 'Retrieve a fresh version instead of reusing the cached page. Start at offset 0.' },
+      },
     },
     output: {
       schema: {
@@ -488,16 +504,64 @@ export function applyWebFetchTool(ctx: Context, timeoutMs: number, maxOutputChar
             ],
           },
           truncated: { type: 'boolean', required: true },
+          ...context === undefined ? {} : {
+            context: { type: 'string' as const, required: true as const },
+          },
         },
       },
-      render: (_args, value) => [{ type: 'text', text: formatFetchOutput(value, maxOutputChars) }],
-      presentationMeta: (_args, value) => fetchMetaFromValue(value, maxOutputChars),
+      render: (_args, value) => {
+        const prefix = value.context === undefined ? '' : `${value.context}\n`
+        return [{ type: 'text', text: `${prefix}${formatFetchOutput(value, Math.max(0, maxOutputChars - prefix.length))}`.slice(0, maxOutputChars) }]
+      },
+      presentationMeta: (_args, value) => fetchMetaFromValue(value,
+        Math.max(0, maxOutputChars - (value.context === undefined ? 0 : value.context.length + 1))),
     },
     timeoutMs,
     // Provider reads do not mutate parent-agent state.
     isConcurrencySafe: () => true,
     async execute(args, exec) {
       const input = parseFetchArgs(args)
+      if (context !== undefined && cache !== undefined) {
+        const offset = args.offset ?? 0
+        const limit = args.limit ?? context.chars
+        if (!Number.isSafeInteger(offset) || offset < 0) throw new Error('offset must be a non-negative safe integer')
+        if (!Number.isSafeInteger(limit) || limit < 1 || limit > context.chars) throw new Error(`limit must be between 1 and ${context.chars}`)
+        if (args.refresh === true && offset !== 0) throw new Error('refresh requires offset 0')
+        exec.signal.throwIfAborted()
+        const owner = exec.agent ?? ctx
+        const generation = ctx.web.resolveCacheScope('fetch')
+        const saved = args.refresh === true ? undefined : cache.get(owner, input.url, generation)
+        if (offset > 0 && saved === undefined) throw new Error('Page version expired or was not retained; fetch offset 0 to retrieve a new version')
+        let value: WebFetchResult
+        let retrievedAt: number
+        if (saved !== undefined) {
+          value = saved.value
+          retrievedAt = saved.storedAt
+        } else {
+          const fetched = await ctx.web.fetch(input, exec.signal)
+          exec.signal.throwIfAborted()
+          const rendered = renderBody(fetched.body, maxOutputChars)
+          value = { url: fetched.url, statusCode: fetched.statusCode, body: { kind: 'text', content: rendered.text }, truncated: fetched.truncated || rendered.sourceTruncated }
+          retrievedAt = Date.now()
+          if (value.statusCode >= 200 && value.statusCode < 300) {
+            const bytes = new TextEncoder().encode(input.url + JSON.stringify(value)).byteLength
+            cache.set(owner, input.url, value, bytes, retrievedAt, generation)
+          }
+        }
+        const total = value.body.content.length
+        if (offset >= total && offset !== 0) throw new Error(`offset exceeds the retained ${total} characters`)
+        const retrievalContext = (end: number) => `Retrieved ${new Date(retrievedAt).toISOString()}; cache ${saved === undefined ? 'miss' : 'hit'}; characters ${offset}-${end} of ${total} (UTF-16, end exclusive). ${end < total ? `Continue with offset ${end}. ` : ''}${value.truncated ? 'Provider or conversion capped the source. ' : ''}Use refresh: true at offset 0 for current content.`
+        const header = `Fetched ${value.url} (HTTP ${value.statusCode})\n\n${EXTERNAL_WEB_CONTENT_NOTICE}\n\n`
+        const budget = maxOutputChars - header.length - retrievalContext(total - 1).length - TRUNCATION_FOOTER.length - 1
+        if (budget < 1) throw new Error('fetchMaxOutputChars is too small to include retrieval details and page content')
+        const end = Math.min(total, offset + limit, offset + budget)
+        return {
+          ...value,
+          body: { kind: 'text' as const, content: value.body.content.slice(offset, end) },
+          truncated: value.truncated || end < total,
+          context: retrievalContext(end),
+        }
+      }
       const result = await ctx.web.fetch(
         { url: input.url },
         exec.signal,

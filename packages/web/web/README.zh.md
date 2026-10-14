@@ -83,6 +83,10 @@ const page = await ctx.web.fetch({ url: 'https://example.com' })
 
 -----
 
+### 效率控制
+
+`resolveCacheScope(kind)` 检查当前供应商可用性，并返回供消费者缓存使用的注册身份。注册或移除任何供应商都会改变该身份。消费者复用结果前必须重新解析；结果保留和时效策略由消费者负责。
+
 <a id="understand-the-implementation"></a>
 ## 理解实现
 

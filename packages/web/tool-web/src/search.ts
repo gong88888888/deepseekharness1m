@@ -11,6 +11,7 @@ import type { GenericCallView, ToolResult, WebSearchResultView, WebSource } from
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { WebSearchResult, WebSearchSource } from '@deepseek-ai/dsh-web'
 import { EXTERNAL_WEB_CONTENT_NOTICE } from './trust.ts'
+import { ResultCache, type CacheLimits } from './result-cache.ts'
 
 /**
  * Default upper bound on returned sources (the `searchMaxResults` config).
@@ -304,6 +305,7 @@ function mergeSearchResults(
  *   `ToolDefinition.timeoutMs` for `@deepseek-ai/dsh-tool-call-timeout-policy` to enforce.
  * @param fetchEnabled - whether the same composition exposes `web_fetch`, which
  *   permits recommending that follow-up tool when it is also visible at assembly.
+ * @param cacheLimits - optional caller-local result reuse bounds; cached results expose retrieval time and refresh control.
  */
 export function applyWebSearchTool(
   ctx: Context,
@@ -311,7 +313,9 @@ export function applyWebSearchTool(
   maxQueries: number,
   timeoutMs: number,
   fetchEnabled: boolean,
+  cacheLimits?: CacheLimits,
 ): void {
+  const cache = cacheLimits === undefined ? undefined : new ResultCache<WebSearchResult>(cacheLimits)
   ctx.systemPrompt.section({
     name: 'tool:web_search',
     order: ctx.systemPrompt.getSectionOrder('TOOL_WEB_SEARCH'),
@@ -326,6 +330,7 @@ export function applyWebSearchTool(
     name: 'web_search',
     description: 'Search the web for current information. Returns an optional summary answer and a list of source URLs.',
     parameters: {
+      ...cache === undefined ? {} : { refresh: { type: 'boolean' as const, description: 'Run the queries again instead of reusing a recent result.' } },
       queries: {
         type: 'array',
         required: true,
@@ -354,18 +359,31 @@ export function applyWebSearchTool(
             },
           },
           truncated: { type: 'boolean', required: true },
+          ...cache === undefined ? {} : { context: { type: 'string' as const, required: true as const } },
         },
       },
-      render: (_args, value) => [{ type: 'text', text: formatSearchOutput(value) }],
+      render: (_args, value) => [{ type: 'text', text: `${value.context === undefined ? '' : `${value.context}\n`}${formatSearchOutput(value)}` }],
       presentationMeta: (_args, value) => searchMetaFromValue(value),
     },
     timeoutMs,
     // Provider reads do not mutate parent-agent state.
     isConcurrencySafe: () => true,
     async execute(args, exec) {
-      const queries = parseSearchArgs(args, maxQueries)
-      const result = await runSearchQueries(ctx, queries, maxResults, exec.signal)
+      const parsed = parseSearchArgs(args, maxQueries)
+      const queries = cache === undefined ? parsed : [...new Set(parsed.map(query => query.trim()))]
+      const owner = exec.agent ?? ctx
+      const key = JSON.stringify(queries)
+      exec.signal.throwIfAborted()
+      const generation = cache === undefined ? undefined : ctx.web.resolveCacheScope('search')
+      const saved = args.refresh === true ? undefined : cache?.get(owner, key, generation)
+      const result = saved?.value ?? await runSearchQueries(ctx, queries, maxResults, exec.signal)
+      exec.signal.throwIfAborted()
+      const retrievedAt = saved?.storedAt ?? Date.now()
+      if (saved === undefined) {
+        cache?.set(owner, key, result, new TextEncoder().encode(key + JSON.stringify(result)).byteLength, retrievedAt, generation)
+      }
       return {
+        ...cache === undefined ? {} : { context: `Retrieved ${new Date(retrievedAt).toISOString()}; cache ${saved === undefined ? 'miss' : 'hit'}. Use refresh: true for current results.` },
         ...result.content !== undefined ? { content: result.content } : {},
         sources: result.sources.map(projectSource),
         truncated: result.truncated,

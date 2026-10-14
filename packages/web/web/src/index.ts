@@ -84,6 +84,7 @@ export class WebRuntime extends Service {
 
   private searchProviders = new Map<string, WebSearchProvider>()
   private fetchProviders = new Map<string, WebFetchProvider>()
+  private cacheGeneration: object = {}
   private readonly searchProviderId: string | undefined
   private readonly fetchProviderId: string | undefined
 
@@ -119,13 +120,33 @@ export class WebRuntime extends Service {
     if (store.has(provider.id)) {
       throw new WebError(`a web provider with id "${provider.id}" is already registered`, 'WEB_DUPLICATE_PROVIDER')
     }
-    const dispose = this.ctx.effect(function* () {
+    const dispose = this.ctx.effect(() => {
       store.set(provider.id, provider)
-      yield () => store.delete(provider.id)
+      this.cacheGeneration = {}
+      return () => {
+        store.delete(provider.id)
+        this.cacheGeneration = {}
+      }
     }, 'web.registerProvider()')
     // ctx.effect's disposer returns Promise<void>; our disposer API is
     // synchronous fire-and-forget — discard the (always-resolved) promise.
     return () => void dispose()
+  }
+
+  /**
+   * Resolve current usability before reusing consumer-owned results.
+   * @param kind - capability whose provider selection must remain usable.
+   * @returns an identity that changes on every provider registration or removal.
+   */
+  resolveCacheScope(kind: 'search' | 'fetch'): object {
+    if (kind === 'search') {
+      resolveProvider({ providers: this.searchProviders,
+        ...this.searchProviderId !== undefined ? { configuredId: this.searchProviderId } : {} })
+    } else {
+      resolveProvider({ providers: this.fetchProviders,
+        ...this.fetchProviderId !== undefined ? { configuredId: this.fetchProviderId } : {} })
+    }
+    return this.cacheGeneration
   }
 
   /**

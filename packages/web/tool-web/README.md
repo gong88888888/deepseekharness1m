@@ -81,6 +81,10 @@ Schema validation rejects an absent or non-array `queries` field, non-string arr
 
 -----
 
+### Efficiency controls
+
+`fetchContext: true` returns bounded Markdown character windows with retrieval time, cache-hit status, and continuation offsets. Offsets count UTF-16 code units. `fetchContextChars` sets the default and maximum window; `offset` and `limit` request a specific range. Continuation requires the retained page version: expiry or eviction fails instead of combining versions. `refresh: true` starts a fresh retrieval at offset zero. Provider and conversion source caps remain explicit limitations; pagination recovers retained converted content, not bytes omitted by the provider.
+
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 

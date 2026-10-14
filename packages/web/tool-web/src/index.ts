@@ -35,6 +35,18 @@ export const DEFAULT_FETCH_MAX_OUTPUT_CHARS = 200_000
 
 /** Plugin config: which web tools to register, search bounds, per-tool budgets, and the fetch output cap. */
 export interface Config {
+  /** Reuse identical normalized query batches within a caller-local TTL. Defaults to false. */
+  searchCache?: boolean
+  /** Enable caller-local cached Markdown windows for web_fetch. Defaults to false. */
+  fetchContext?: boolean
+  /** Maximum Markdown characters in a fetch window. Defaults to 12000. */
+  fetchContextChars?: number
+  /** Maximum cached results per caller and tool. Defaults to 16. */
+  cacheEntries?: number
+  /** Maximum retained UTF-8 bytes per caller and tool. Defaults to 1000000. */
+  cacheBytes?: number
+  /** Result reuse lifetime in milliseconds. Defaults to 60000. */
+  cacheTtlMs?: number
   /** Register `web_search`. Defaults to true. */
   search?: boolean
   /** Register `web_fetch`. Defaults to true. */
@@ -52,6 +64,12 @@ export interface Config {
 }
 
 export const Config: z<Config> = z.object({
+  searchCache: z.boolean().default(false),
+  fetchContext: z.boolean().default(false),
+  fetchContextChars: z.number().default(12000),
+  cacheEntries: z.number().default(16),
+  cacheBytes: z.number().default(1_000_000),
+  cacheTtlMs: z.number().default(60_000),
   search: z.boolean().default(true),
   fetch: z.boolean().default(true),
   searchMaxResults: z.number().default(WEB_SEARCH_MAX_RESULTS),
@@ -83,13 +101,20 @@ function assertPositiveInteger(name: string, value: number): void {
 export function apply(ctx: Context, config: Config): void {
   // schemastery (Config) has already filled every defaulted field.
   const resolved = config as ResolvedConfig
+  assertPositiveInteger('fetchContextChars', resolved.fetchContextChars)
+  assertPositiveInteger('cacheEntries', resolved.cacheEntries)
+  assertPositiveInteger('cacheBytes', resolved.cacheBytes)
+  assertPositiveInteger('cacheTtlMs', resolved.cacheTtlMs)
   assertPositiveInteger('searchMaxResults', resolved.searchMaxResults)
   assertPositiveInteger('searchMaxQueries', resolved.searchMaxQueries)
   assertPositiveInteger('fetchTimeoutMs', resolved.fetchTimeoutMs)
   assertPositiveInteger('searchTimeoutMs', resolved.searchTimeoutMs)
   assertPositiveInteger('fetchMaxOutputChars', resolved.fetchMaxOutputChars)
   if (resolved.search) {
-    applyWebSearchTool(ctx, resolved.searchMaxResults, resolved.searchMaxQueries, resolved.searchTimeoutMs, resolved.fetch)
+    applyWebSearchTool(ctx, resolved.searchMaxResults, resolved.searchMaxQueries, resolved.searchTimeoutMs, resolved.fetch,
+      resolved.searchCache ? { entries: resolved.cacheEntries, bytes: resolved.cacheBytes, ttlMs: resolved.cacheTtlMs } : undefined)
   }
-  if (resolved.fetch) applyWebFetchTool(ctx, resolved.fetchTimeoutMs, resolved.fetchMaxOutputChars)
+  if (resolved.fetch) applyWebFetchTool(ctx, resolved.fetchTimeoutMs, resolved.fetchMaxOutputChars,
+    resolved.fetchContext ? { chars: resolved.fetchContextChars,
+      cache: { entries: resolved.cacheEntries, bytes: resolved.cacheBytes, ttlMs: resolved.cacheTtlMs } } : undefined)
 }

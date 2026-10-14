@@ -83,6 +83,10 @@ Failures throw `WebError` with a stable, machine-routable code; the message adds
 
 -----
 
+### Efficiency controls
+
+`resolveCacheScope(kind)` checks current provider availability and returns a registration identity for consumer-owned caches. Registering or removing any provider changes that identity. Cached consumers must re-resolve it before reuse; result retention and freshness policies belong to the consumer.
+
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 

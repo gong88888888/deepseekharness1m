@@ -181,6 +181,13 @@ registerSearchProvider(provider: WebSearchProvider): () => void
 registerFetchProvider(provider: WebFetchProvider): () => void
 
 /**
+ * Resolve current usability before reusing consumer-owned results.
+ * @param kind - capability whose provider selection must remain usable.
+ * @returns an identity that changes on every provider registration or removal.
+ */
+resolveCacheScope(kind: 'search' | 'fetch'): object
+
+/**
  * Run one search through the selected provider. Resolves the provider at call
  * time with the selection rules above; throws {@link WebError} when the
  * capability cannot run. The seam enforces `request.maxResults` on the result:

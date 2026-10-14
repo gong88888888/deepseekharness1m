@@ -56,6 +56,10 @@ Any preflight rejection leaves no job id or registered work. Jobs managed by the
 
 -----
 
+### Efficiency controls
+
+`read(id, caller, true)` consumes final-output bodies once. Passing false or omitting the third argument recovers retained final output; stream producers always keep their incremental cursor semantics. Access checks precede consumption, terminal reads mark the job reported, and waiting does not consume output.
+
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 

@@ -40,6 +40,9 @@
     },
     {
       "path": "../subagent"
+    },
+    {
+      "path": "../../util/values"
     }
   ]
 }

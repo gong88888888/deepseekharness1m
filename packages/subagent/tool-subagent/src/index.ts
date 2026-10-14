@@ -12,6 +12,7 @@ import { scopeChainOf, scopeOf } from '@deepseek-ai/dsh-scope'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import type { Agent, AgentOptions } from '@deepseek-ai/dsh-agent'
+import { assertObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { SessionSeq } from '@deepseek-ai/dsh-session'
@@ -20,7 +21,8 @@ import {
   assertSubagentMaxDepth,
   parentAgentOptionsForDelegation,
 } from '@deepseek-ai/dsh-subagent'
-import type { SubagentProvider } from '@deepseek-ai/dsh-subagent'
+import type { SubagentProvider, SubagentActivation, SubagentResult } from '@deepseek-ai/dsh-subagent'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import {
   assertAllowedModelSelection,
   hasConfiguredLlmSelection,
@@ -46,6 +48,8 @@ const delegationTools = new Set<ToolDefinition>()
 
 /** Config: which registered provider this tool delegates to, plus child defaults. */
 export interface Config {
+  /** Expose output_schema for foreground delegation to a structured-output-capable provider. Defaults to false. */
+  structuredOutput?: boolean
   /** The `ctx.subagents` provider name to start runs on (e.g. `spawn`, `acp`). */
   provider: string
   /**
@@ -92,6 +96,7 @@ export interface Config {
 }
 
 export const Config: z<Config> = z.object({
+  structuredOutput: z.boolean().default(false),
   provider: z.string().required(),
   toolName: z.string().default('subagent'),
   modelSelectionSettings: z.boolean().default(false),
@@ -115,6 +120,69 @@ export const Config: z<Config> = z.object({
   }).default(undefined as unknown as { allow: string[]; deny: string[] }),
   maxDepth: z.union([z.natural().max(Number.MAX_SAFE_INTEGER), z.const('provider-managed' as const)]),
 })
+
+/** Render text blocks from a structured foreground child's final answer. */
+function outputValueText(values: JsonValue[]): string {
+  return values
+    .filter((value): value is { type: 'text'; text: string } =>
+      typeof value === 'object' && value !== null && !Array.isArray(value)
+      && value.type === 'text' && typeof value.text === 'string')
+    .map(value => value.text)
+    .join('')
+}
+
+/** A non-completed child result is a tool failure even when it has partial output. */
+function stopReasonError(result: SubagentResult): string | undefined {
+  switch (result.stopReason) {
+    case 'completed': return undefined
+    case 'aborted': return 'subagent run was cancelled'
+    case 'error': return 'subagent run failed'
+    case 'max-tokens': return 'subagent run hit its token limit before finishing'
+    case 'refusal': return 'subagent declined the task'
+    default: return `subagent run ended abnormally (${String(result.stopReason)})`
+  }
+}
+
+/** Preserve provider diagnostics and partial assistant output on failure. */
+function withDiagnosticAndPartialText(error: string, result: SubagentResult): string {
+  const diagnostic = result.diagnostic === undefined ? '' : `\nDiagnostic: ${result.diagnostic}`
+  const text = result.output
+    .filter((block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text')
+    .map(block => block.text)
+    .join('')
+  const partial = text.length === 0 ? '' : `\nPartial output before the run ended:\n${text}`
+  return `${error}${diagnostic}${partial}`
+}
+
+/** Await one caller-owned activation and release it after its result settles. */
+async function settleForegroundRun(run: SubagentActivation): Promise<{
+  kind: 'foreground'
+  subagentId: SubagentActivation['childId']
+  output: JsonValue[]
+  structured: JsonValue
+}> {
+  const [execution] = await Promise.allSettled([run.result.then((result) => {
+    const error = stopReasonError(result)
+    if (error !== undefined) throw new Error(withDiagnosticAndPartialText(error, result))
+    if (result.structured === undefined) throw new Error('subagent completed without the requested structured result')
+    return {
+      kind: 'foreground' as const,
+      subagentId: run.childId,
+      output: result.output as unknown as JsonValue[],
+      structured: result.structured as JsonValue,
+    }
+  })])
+  const [disposal] = await Promise.allSettled([run.dispose()])
+  if (execution.status === 'rejected') {
+    if (disposal.status === 'rejected') {
+      throw new AggregateError([execution.reason, disposal.reason],
+        `subagent run failed: ${String(execution.reason)}; dispose failed: ${String(disposal.reason)}`)
+    }
+    throw execution.reason
+  }
+  if (disposal.status === 'rejected') throw disposal.reason
+  return execution.value
+}
 
 /**
  * Model-facing wording from the provider's conversation-history descriptor
@@ -174,6 +242,9 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
   ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
 
   const assertSubagentProviderConfiguration = (subagentProvider: SubagentProvider): void => {
+    if (config.structuredOutput === true && !subagentProvider.capabilities.outputSchema) {
+      throw new Error(`tool-subagent: provider "${subagentProvider.name}" does not support structured output`)
+    }
     if (ctx.subagents.resolveMaxDepth(config.maxDepth) !== undefined && !subagentProvider.capabilities.depthLimit) {
       throw new Error(
         `tool-subagent: provider "${subagentProvider.name}" cannot enforce maxDepth (no depthLimit capability) — `
@@ -227,8 +298,12 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
           + (subagentProvider.prepareContinuable !== undefined
             ? ' The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes.'
             : ' The completion notice includes its final answer. This backend does not accept follow-up messages.')
-          + choiceDescription,
+          + choiceDescription
+          + (config.structuredOutput === true ? ' Supply output_schema to wait for a validated structured final result.' : ''),
         parameters: {
+          ...config.structuredOutput === true ? {
+            output_schema: { type: 'json' as const, description: 'Object-rooted JSON Schema for a validated final result. Supplying it waits for the child; supported keys: type, properties, required, additionalProperties, items, enum, const, oneOf.' },
+          } : {},
           cwd: {
             type: 'string',
             description: 'Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent.',
@@ -267,14 +342,22 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
         },
         output: {
           schema: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              kind: { type: 'string', required: true, const: 'activation' },
-              subagentId: { type: 'string', required: true },
-            },
+            oneOf: [
+              { type: 'object', additionalProperties: false, properties: {
+                kind: { type: 'string', required: true, const: 'activation' },
+                subagentId: { type: 'string', required: true },
+              } },
+              { type: 'object', additionalProperties: false, properties: {
+                kind: { type: 'string', required: true, const: 'foreground' },
+                subagentId: { type: 'string', required: true },
+                output: { type: 'array', required: true, items: { type: 'json' } },
+                structured: { type: 'json', required: true },
+              } },
+            ],
           },
-          render: (_args, value) => [{ type: 'text', text: `started subagent ${value.subagentId}` }],
+          render: (_args, value) => [{ type: 'text', text: value.kind === 'activation'
+            ? `started subagent ${value.subagentId}`
+            : value.structured === undefined ? outputValueText(value.output) : JSON.stringify(value.structured) }],
         },
         isConcurrencySafe: () => true,
         async execute(args, exec) {
@@ -282,6 +365,11 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
           if (!parent) {
             // Non-agent callers provide no parent for delegation ownership.
             throw new Error('subagent tool requires a calling agent (exec.agent was undefined)')
+          }
+          const outputSchema = args.output_schema
+          if (outputSchema !== undefined) {
+            if (config.structuredOutput !== true) throw new Error('output_schema requires structuredOutput configuration')
+            assertObjectJsonSchema(outputSchema)
           }
 
           const modelRequest = args as DelegationModelRequest
@@ -323,6 +411,7 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
           const maxDepth = runtimeCtx.subagents.resolveMaxDepth(config.maxDepth)
           const request = {
             ...args.cwd === undefined ? {} : { cwd: args.cwd },
+            ...outputSchema === undefined ? {} : { outputSchema },
             prompt: [{ type: 'text', text: args.prompt }] as ContentBlock[],
             parent,
             ...requestedChildAgentOptions !== undefined ? { agentOptions: requestedChildAgentOptions } : {},
@@ -336,9 +425,11 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
             label: args.description,
             request,
             signal: exec.signal,
-            delivery: 'parent',
+            delivery: outputSchema === undefined ? 'parent' : 'caller',
           })
-          return { kind: 'activation' as const, subagentId: started.childId }
+          return outputSchema === undefined
+            ? { kind: 'activation' as const, subagentId: started.childId }
+            : settleForegroundRun(started)
         },
       })
       const disposeTool = runtimeCtx.effect(() => {
@@ -349,7 +440,6 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
           unregister()
         }
       })
-      // oxlint-disable-next-line typescript/no-misused-promises -- Tool and guidance disposal are synchronous.
       mounted = { subagentProvider, disposeTool }
     }
 
@@ -399,7 +489,6 @@ export function apply(ctx: Context, config: Config, session?: Session): void {
   }
   const selectForSession = (target: Session): ModelSelectionPolicy | undefined => {
     const freshSession = target.firstLiveSeq === 0
-      // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
       && target.eventAt(SessionSeq(0))?.type !== 'session/end-seed'
     let allowedModels = subagentModelSelectionPolicy(ctx.sessionProjections, target)
     if (allowedModels === undefined) {

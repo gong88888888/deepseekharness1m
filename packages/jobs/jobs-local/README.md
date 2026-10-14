@@ -62,6 +62,10 @@ Starting work fails without a controller that serves the owner — loading `dsh-
 
 -----
 
+### Efficiency controls
+
+Final-output records track whether their body has been read independently of completion-notice delivery. The optional consume-final read suppresses repeated bodies while retaining the original for explicit recovery. Owner checks, cancellation, stream cursors, and teardown settlement use the same registry rules.
+
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 

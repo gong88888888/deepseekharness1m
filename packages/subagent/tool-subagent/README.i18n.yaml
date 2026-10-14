@@ -9,8 +9,8 @@
   en: 686fb5136bef0a3b
   zh: d25d6569174a01b5
 /deepseek-ai-dsh-tool-subagent/summary:
-  en: 958d2b1c56ac6ec7
-  zh: cc1997a9ac09e7a5
+  en: a15666875f75ff57
+  zh: a51feaed8fd923aa
 /deepseek-ai-dsh-tool-subagent/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -18,14 +18,17 @@
   en: 93f1701f5209ecb5
   zh: 6310fd012400aead
 /deepseek-ai-dsh-tool-subagent/use-this-package/minimal-configuration:
-  en: d01d4425bc1875dd
-  zh: f3d36c8a1e5ed0fa
+  en: 6de8e1d4e6c1acaf
+  zh: 94a5272894f0565a
 /deepseek-ai-dsh-tool-subagent/use-this-package/managed-delegation:
-  en: 42673064ba88a211
-  zh: 8fa26285bd649dc9
+  en: ccd61df6fcdf89d2
+  zh: 7718d69e6ed6035d
+/deepseek-ai-dsh-tool-subagent/use-this-package/structured-child-result:
+  en: 05581cdece10e6bc
+  zh: ee0cc008a87f33fa
 /deepseek-ai-dsh-tool-subagent/use-this-package/selecting-a-child-llm:
   en: 0d37e3b3957515e4
-  zh: ea1a94b2f29e7d9a
+  zh: c43fa423fa76f224
 /deepseek-ai-dsh-tool-subagent/understand-the-implementation:
   en: 6ce5f749256a7e6c
   zh: a4f2adb04a70d9cf
@@ -33,7 +36,7 @@
   en: 5ceacfed4ea0c648
   zh: 005284534923d854
 /deepseek-ai-dsh-tool-subagent/understand-the-implementation/activation-ownership:
-  en: ef692c4d17290920
+  en: 91061fbbd84284b9
   zh: b1d0d3dab011e2cd
 /deepseek-ai-dsh-tool-subagent/understand-the-implementation/result-acknowledgement:
   en: 3cdb913209febc42

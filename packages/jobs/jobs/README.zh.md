@@ -56,6 +56,10 @@ kind: "package-reference"
 
 -----
 
+### 效率控制
+
+`read(id, caller, true)` 只交付一次最终输出正文。第三个参数为 false 或省略时可重新读取保留的最终输出；流式生产者始终沿用增量游标。消费输出之前执行访问检查，终态读取将作业标记为已报告，等待本身不消费输出。
+
 <a id="understand-the-implementation"></a>
 ## 理解实现
 

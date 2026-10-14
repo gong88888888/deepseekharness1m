@@ -53,6 +53,10 @@ kind: "package-reference"
 
 -----
 
+### 效率控制
+
+`executionControls: true` 提供 `max_agents`，用于设置包含重试在内的单次运行子任务预算，必须为正且不能超过引擎上限。附加编写指导要求限定输入、列出验收检查、返回结构化字段，并在重试失败项前检查部分副作用。运行时不会自动重试修改操作，也不会从描述性文字推断任务已完成。
+
 <a id="understand-the-implementation"></a>
 ## 理解实现
 

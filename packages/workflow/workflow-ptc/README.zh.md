@@ -38,6 +38,7 @@ kind: "package-reference"
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
+| `maxConcurrentRuns` | `0` | 此引擎实例允许的活跃工作流数量；`0` 表示不限制准入。 |
 | `provider` | `spawn` | `agent()` 调用使用的宿主侧 subagent 提供方。 |
 | `maxConcurrentAgents` | `0` | 并发 `agent()` 上限；`0` 根据可用 CPU 并行度解析。 |
 | `maxTotalAgents` | `1000` | 一次运行最多启动的 `agent()` 调用数。 |

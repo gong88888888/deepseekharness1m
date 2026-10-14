@@ -31,6 +31,8 @@ export type {
 
 /** Plugin config (all optional — `static Config` supplies the defaults). */
 export interface Config {
+  /** Maximum live runs in this engine instance; 0 leaves admission uncapped. Defaults to 0. */
+  maxConcurrentRuns?: number
   /** The `ctx.subagents` provider children run on (default `spawn`). */
   provider?: string
   /** Concurrent `agent()` ceiling; `0` (the default) auto-resolves to `min(16, max(1, cores - 2))`. */
@@ -104,6 +106,7 @@ class PtcWorkflowEngine extends WorkflowEngine {
   static inject = ['subagents', 'ptcRuntime', 'sandboxPolicy', 'workingDirectory']
 
   static Config: z<Config> = z.object({
+    maxConcurrentRuns: z.natural().max(Number.MAX_SAFE_INTEGER).default(0),
     provider: z.string().default('spawn'),
     maxConcurrentAgents: z.natural().default(0),
     maxTotalAgents: z.natural().min(1).default(1000),
@@ -112,6 +115,7 @@ class PtcWorkflowEngine extends WorkflowEngine {
   })
 
   private readonly config: ResolvedConfig
+  private activeRuns = 0
 
   constructor(ctx: Context, config: Config) {
     super(ctx)
@@ -132,6 +136,9 @@ class PtcWorkflowEngine extends WorkflowEngine {
    * @returns the live run (its `result` resolves when the script settles).
    */
   start(request: WorkflowStartRequest): WorkflowRun {
+    if (this.config.maxConcurrentRuns > 0 && this.activeRuns >= this.config.maxConcurrentRuns) {
+      throw new WorkflowError('workflow capacity reached; collect existing runs before starting more work', 'WORKFLOW_CAPACITY')
+    }
     const meta = validateMeta(request.meta)
     assertBodyParses(request.script, meta.name)
     const subagentProvider = resolveSubagentProvider(this.ctx, this.config.provider, request.subagentProvider)
@@ -174,10 +181,12 @@ class PtcWorkflowEngine extends WorkflowEngine {
       request.signal,
     )
 
+    this.activeRuns += 1
     this.emitWorkflowEvent('workflow/start', info)
     // `workflow/end` fires as the (never-rejecting) result settles, with the
     // outcome DATA only — the value stays with the run's holder.
     void run.result.then((settled) => {
+      this.activeRuns -= 1
       this.emitWorkflowEvent('workflow/end', info, {
         stopReason: settled.stopReason,
         ...settled.error !== undefined ? { error: settled.error } : {},

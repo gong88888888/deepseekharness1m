@@ -53,6 +53,10 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 -----
 
+### Efficiency controls
+
+`executionControls: true` exposes `max_agents`, a positive per-run budget that includes retries and cannot exceed the engine ceiling. Its additional authoring guidance requires scoped inputs, acceptance checks, structured return fields, and inspection of partial side effects before retrying failed items. The runtime does not automatically retry mutations or infer task completion from prose.
+
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 

@@ -42,6 +42,8 @@ export const inject = ['tools', 'workflowEngine', 'systemPrompt']
 
 /** Config: the model-facing tool name plus result rendering caps. */
 export interface Config {
+  /** Expose a per-run child budget and structured completion guidance. Defaults to false. */
+  executionControls?: boolean
   /** The model-facing tool name to register (default `workflow`). */
   toolName?: string
   /** Rendered-result ceiling, in characters: a longer JSON value is truncated with a notice (default 50000). */
@@ -57,6 +59,7 @@ export interface Config {
 }
 
 export const Config: z<Config> = z.object({
+  executionControls: z.boolean().default(false),
   toolName: z.string().default('workflow'),
   maxResultChars: z.natural().min(1).default(50_000),
   enableRunInBackground: z.boolean().default(true),
@@ -327,8 +330,12 @@ export function apply(ctx: Context, config: Config): void {
   })
   ctx.tools.register(defineTool({
     name: toolName,
-    description: DESCRIPTION,
+    description: DESCRIPTION + (config.executionControls === true
+      ? '\nGive each child only the files, facts, and constraints its task needs. State acceptance checks and the required return fields; use opts.schema for machine-checked results. Prefer independent spawned tasks over copying unrelated conversation history. Budget all attempts with max_agents. Keep failed items identifiable and retry only after checking for partial side effects; never repeat a completed item.' : ''),
     parameters: {
+      ...config.executionControls === true ? {
+        max_agents: { type: 'integer' as const, description: 'Total child-start budget for this run, including retries. Must be positive and cannot exceed the engine ceiling.' },
+      } : {},
       script: {
         type: 'string',
         required: true,
@@ -404,6 +411,7 @@ export function apply(ctx: Context, config: Config): void {
       }],
     },
     async execute(args, exec) {
+      if (args.max_agents !== undefined && config.executionControls !== true) throw new Error('max_agents requires executionControls configuration')
       const parent = exec.agent
       if (!parent) {
         // The loop sets `exec.agent` for every model-driven call; its absence
@@ -431,6 +439,7 @@ export function apply(ctx: Context, config: Config): void {
       // synchronously here and become isError results via the registry — the
       // model sees the violation list and can correct the call.
       const run = ctx.workflowEngine.start({
+        ...args.max_agents === undefined ? {} : { maxTotalAgents: args.max_agents },
         script: args.script,
         meta: args.meta,
         ...args.args !== undefined ? { args: args.args } : {},

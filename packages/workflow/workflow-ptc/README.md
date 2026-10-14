@@ -38,6 +38,7 @@ With those dependencies available, mount the engine and its model-facing consume
 
 | Field | Default | Meaning |
 |---|---|---|
+| `maxConcurrentRuns` | `0` | Live workflow runs admitted by this engine instance; `0` leaves admission uncapped. |
 | `provider` | `spawn` | Host-side subagent provider used by `agent()` calls. |
 | `maxConcurrentAgents` | `0` | Concurrent `agent()` ceiling; `0` resolves from available CPU parallelism. |
 | `maxTotalAgents` | `1000` | Total `agent()` calls one run may start. |

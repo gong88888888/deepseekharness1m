@@ -99,7 +99,7 @@ class StubEngine extends WorkflowEngine {
   }
 }
 
-async function setup(config?: { toolName?: string; maxResultChars?: number }) {
+async function setup(config?: toolWorkflow.Config) {
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
@@ -131,6 +131,16 @@ function execute(ctx: Context, args: unknown, extra?: {
 }
 
 describe('dsh-tool-workflow', () => {
+  it('passes an explicit child-attempt budget without changing result collection', async () => {
+    const { ctx, engine, parent } = await setup({ executionControls: true })
+    const pending = execute(ctx, { script: SCRIPT, meta: META, max_agents: 3 }, { agent: parent })
+    await vi.waitFor(() => { expect(engine.requests).toHaveLength(1) })
+    expect(engine.requests[0]?.maxTotalAgents).toBe(3)
+    engine.settle({ value: 1, stopReason: 'completed', agentsStarted: 0 })
+    expect((await pending).isError).toBe(false)
+    expect(engine.disposed).toBe(1)
+  })
+
   it('starts a run with the script/args/parent/signal and renders the completed value', async () => {
     const { ctx, engine, parent } = await setup()
     const controller = new AbortController()

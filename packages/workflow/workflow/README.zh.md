@@ -58,6 +58,10 @@ return { reviewed: reviews.length }
 
 -----
 
+### 效率控制
+
+`WORKFLOW_CAPACITY` 表示供应商在创建新运行之前已用尽准入容量。调用者应先收集现有工作再提交新的运行；此错误不表示此前的运行失败，也不代表可以重复执行其副作用。
+
 <a id="understand-the-implementation"></a>
 ## 理解实现
 

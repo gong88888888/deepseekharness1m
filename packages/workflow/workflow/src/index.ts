@@ -113,6 +113,7 @@ export type WorkflowErrorCode =
   | 'UNSUPPORTED_SCHEMA'
   | 'AGENT_CAP'
   | 'ITEM_CAP'
+  | 'WORKFLOW_CAPACITY'
   | 'AGENT_START'
   | 'AGENT_RESULT'
   | 'RESULT_UNSERIALIZABLE'

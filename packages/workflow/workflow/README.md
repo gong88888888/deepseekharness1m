@@ -58,6 +58,10 @@ A script that does not parse, a malformed meta block, an unavailable provider ro
 
 -----
 
+### Efficiency controls
+
+`WORKFLOW_CAPACITY` identifies provider admission exhaustion before a new run is created. Callers collect existing work before submitting another run; the error does not mean a prior run failed or authorize retrying its side effects.
+
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 

@@ -1,36 +1,29 @@
-# DeepSeek Harness
+# DeepSeek Harness (项目说明)
 
-English | [中文](README.zh.md)
+English summary below | 中文说明
 
-DeepSeek Harness (`dsh`) is an open-source agent harness developed by [DeepSeek AI](https://deepseek.com).
+DeepSeek Harness（简称 dsh）是一个面向可扩展、多插件化的 agent harness 框架，基于 "everything-is-a-plugin" 的设计理念，由 DeepSeek AI 开发与维护（本仓库为个人镜像/分支）。本分支：codex/github-upload-candidate 仅更新了 README 与若干文档以便上传/展示。
 
-It is built on an **everything-is-a-plugin** architecture and powered by [Cordis](https://github.com/cordiverse/cordis), whose design is described in [_A Programming Paradigm for Spatiotemporal Composability_](https://arxiv.org/abs/2608.25512).
+核心要点
 
-Documentation: [https://deepseek-harness.github.io/deepseek-harness/](https://deepseek-harness.github.io/deepseek-harness/)
+- 架构：以插件为中心（Service Definition + provider 模型），方便扩展模型适配器、工具、沙箱、子代理等能力。
+- 运行时：使用 Cordis 作为运行时设计灵感（参见 upstream 设计文档）。
+- 状态：开发者预览（developer preview）；接口和行为可能发生不兼容的变动，请在生产环境使用前评估风险并查看安全说明。
 
-## Developer preview
+快速开始
 
-DeepSeek Harness is in _developer preview_ and iterating rapidly. **THERE WILL BE COMPATIBILITY-BREAKING CHANGES.**
+从 npm 运行（推荐本地快速体验）：
 
-Review the [safety notice](SAFETY.md) before running the project.
-
-## Run
-
-### Run from `npm`
-
-Install `Node.js`, then run:
-
-```sh
+```bash
+# 使用 npx 直接运行 Web UI
 npx @deepseek-ai/dsh web
 ```
 
-The command starts the Web UI at `http://127.0.0.1:3080` by default and opens it in the default browser for a local launch. An SSH launch only prints the host URL because the SSH client or editor owns the local forwarded address. Pass `--no-open` to run the server without opening a browser. See [Web UI guide](docs/user/guide/index.md).
+默认会在本地启动 Web UI（默认地址：http://127.0.0.1:3080）。
 
-### Run from source
+从源码运行（适用于开发与调试）：
 
-To run from a repository checkout:
-
-```sh
+```bash
 git clone https://github.com/deepseek-ai/deepseek-harness.git
 cd deepseek-harness
 pnpm install
@@ -38,27 +31,35 @@ pnpm run build
 pnpm dsh web
 ```
 
-`pnpm run build` prepares the repository artifacts. `pnpm dsh web` uses those built artifacts without rebuilding.
+- `pnpm run build` 会构建仓库产物。
+- `pnpm dsh web` 使用构建好的产物来启动服务（不会重复构建）。
 
-## Community and support
+仓库结构概览（与本分支相关）
 
-- Submit feedback or bug reports through [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions).
-- Add the [`dsh-plugin`](https://github.com/topics/dsh-plugin) topic to your plugin repository for discoverability.
-- Join <a href="https://discord.gg/4MrtZUhpxg">DeepSeek Harness Discord community</a>.
+- README.md — 本文件（项目总览与快速入门）。
+- native/ — 本仓库托管并维护的 native 源码与平台包（例如 Landlock 启动器与 POSIX 绑定）。请参阅 native/README.md 获取更多平台细节。
+- packages/ — npm 包工作区，按照功能族分组（core、llm、web、sandbox、session 等），各子目录包含对应 package 的 README 与使用约定。详细分组与职责请参阅 packages/README.md。
+- docs/ — 架构、开发与使用的详细文档（如果存在）。
 
-## Contributing
+重要文档与资源
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+- 上游文档（官方）：https://deepseek-harness.github.io/deepseek-harness/ 
+- 安全须知：请在运行前阅读 SAFETY.md（仓库中如存在）。
+- 贡献指南：CONTRIBUTING.md
+- 第三方许可证声明：THIRD_PARTY_NOTICES.md
 
-## Development
+开发者提示
 
-Start with the [development guide](docs/development.md) and [architecture documentation](docs/architecture.md).
+- 本仓库采用 pnpm 工作区管理（packages/ 与 system/ 等子包共享同一 lockfile）。
+- 本项目包含原生模块（Node Addon），CI 会针对支持的架构构建并测试本地原生包。发布流程会将各架构的产物打包为 npm tarball。
+- 插件与扩展：为便于插件发现，请在插件仓库打上 `dsh-plugin` topic。
 
-`pnpm run dev:web` builds, serves, and rebuilds client bundles on source edits in one terminal, and `make help` lists the matching Make targets for Web and Desktop; the guide's application commands section owns the full table.
+贡献与社区
 
-For agents, follow [AGENTS.md](AGENTS.md).
+- 问题与反馈：使用上游仓库的 Discussions / Issues（若本仓库为镜像，请在原仓库提 issue）。
+- 社区：DeepSeek Harness 社区（例如 Discord 链接，见官方文档）。
 
-## Citation
+引用（Citation）
 
 ```bibtex
 @misc{deepseek-harness2026,
@@ -70,8 +71,12 @@ For agents, follow [AGENTS.md](AGENTS.md).
 }
 ```
 
-## License
+许可证
 
-[MIT](LICENSE)
+本仓库使用 MIT 许可证（参见 LICENSE）。第三方依赖及其许可证请查看 THIRD_PARTY_NOTICES.md。
 
-Third-party dependencies and their licenses are disclosed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+本次变更说明
+
+- 重写并精简 README，以匹配仓库中 native/ 与 packages/ 的现有说明，保留上游入口与关键链接。
+
+如果你希望我把 README 同步为英文优先版、或添加更多运行示例、CI/发布说明、或按包生成的子 README 汇总页，请告诉我，我会继续把更新提交到本分支。

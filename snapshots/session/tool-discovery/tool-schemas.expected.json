@@ -1,0 +1,72 @@
+{
+  "initial": [
+    {
+      "name": "tool_discover",
+      "description": "Find and load additional tools. Search English keywords from the task, or provide exact tool names. Matching tools become available on the next request and remain loaded for this session.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Keywords in tool names or descriptions; empty string lists the first available tools."
+          },
+          "names": {
+            "type": "array",
+            "description": "Exact tool names to load instead of a keyword search.",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "changes": [
+    [
+      {
+        "name": "read",
+        "description": "Read a UTF-8 text file and return line-numbered content.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "file_path": {
+              "type": "string",
+              "description": "Path to read, resolved by the filesystem backend."
+            },
+            "offset": {
+              "type": "number",
+              "description": "1-based first line to return. Defaults to 1."
+            },
+            "limit": {
+              "type": "number",
+              "description": "Maximum number of lines to return. Defaults to 2."
+            }
+          },
+          "required": [
+            "file_path"
+          ]
+        }
+      },
+      {
+        "name": "tool_discover",
+        "description": "Find and load additional tools. Search English keywords from the task, or provide exact tool names. Matching tools become available on the next request and remain loaded for this session.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Keywords in tool names or descriptions; empty string lists the first available tools."
+            },
+            "names": {
+              "type": "array",
+              "description": "Exact tool names to load instead of a keyword search.",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    ]
+  ]
+}

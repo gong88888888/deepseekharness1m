@@ -54,6 +54,10 @@ The unit is inert without the projection registry: `inject` keeps the fiber pend
 
 -----
 
+### Efficiency controls
+
+`performanceLogging: true` writes local JSONL counters to the required absolute `performanceLogPath`. Model records include first-attempt preparation, provider iteration, first-token latency, attempt number, schema size, and available token counters. Tool records separate call-to-start waiting, pre-execution policy, execution, total duration, and output bytes. These are measured extension-point intervals, not isolated network or OS process-start times. Missing measurements are null. Prompt, argument, and result bodies are excluded. `performanceMaxPending` and `performanceMaxRecordBytes` bound the asynchronous writer; overload is counted, failures are logged, and unload drains pending writes. The durable projection and model requests remain unchanged.
+
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 

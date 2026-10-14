@@ -54,6 +54,10 @@ kind: "package-reference"
 
 -----
 
+### 效率控制
+
+`performanceLogging: true` 将本地 JSONL 计数写入必填的绝对路径 `performanceLogPath`。模型记录包括首次尝试的准备耗时、供应商迭代耗时、首 token 延迟、尝试次数、定义大小及可用 token 计数。工具记录分别测量调用到执行前的等待、执行前策略、执行、总耗时和输出字节。这些是扩展点之间的实测区间，不是单独的网络或操作系统进程启动耗时。缺失值为 null，不记录提示词、参数或结果正文。`performanceMaxPending` 和 `performanceMaxRecordBytes` 限制异步写入；过载计数、写入失败记录警告，卸载时等待队列完成。持久投影和模型请求保持原有内容。
+
 <a id="understand-the-implementation"></a>
 ## 理解实现
 

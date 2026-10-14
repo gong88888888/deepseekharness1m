@@ -159,7 +159,7 @@ export interface Config {
 
 - `inject`: `tools`
 - `refs`: [`ToolPresentationMode`](subsystems/tools.md)
-- `source`: [`packages/core/agent-tool-presentation/src/index.ts:38`](../packages/core/agent-tool-presentation/src/index.ts)
+- `source`: [`packages/core/agent-tool-presentation/src/index.ts:39`](../packages/core/agent-tool-presentation/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config. */
@@ -172,6 +172,14 @@ export interface Config {
    * composed for nothing.
    */
   mode: ToolPresentationMode
+  /** Enable session-local native tool discovery. Defaults to false. */
+  discovery?: boolean
+  /** Native schemas advertised initially when discovery is enabled. Defaults to an empty list. */
+  initialTools?: string[]
+  /** Maximum definitions loaded by one discovery call. Defaults to 5. */
+  discoveryMaxResults?: number
+  /** Maximum description characters returned per discovery match. Defaults to 160. */
+  discoveryDescriptionChars?: number
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-agent-tool-presentation -->
@@ -2870,6 +2878,29 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-session-reference -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-session-stats -->
+<a id="deepseek-aidsh-session-stats"></a>
+
+## `@deepseek-ai/dsh-session-stats`
+
+- `inject`: `sessionProjections`
+- `source`: [`packages/session/session-stats/src/index.ts:25`](../packages/session/session-stats/src/index.ts)
+
+```ts config-catalog
+/** Optional local timing collection; disabled for ordinary deployments. */
+export interface Config {
+  /** Enable local JSONL model and tool performance records. Defaults to false. */
+  performanceLogging?: boolean
+  /** Absolute output file, required when performanceLogging is enabled. */
+  performanceLogPath?: string
+  /** Maximum pending records before dropping observations. Defaults to 256. */
+  performanceMaxPending?: number
+  /** Maximum bytes per record. Defaults to 8192. */
+  performanceMaxRecordBytes?: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-session-stats -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-session-telemetry-otel -->
 <a id="deepseek-aidsh-session-telemetry-otel"></a>
 
@@ -3697,8 +3728,10 @@ export interface Config {
 ```ts config-catalog
 /** Plugin config (all optional — `Config` supplies the defaults). */
 export interface Config {
-  /** Default and maximum number of lines returned by one `read` call. */
+  /** Maximum lines per `read`; also the default when `readDefaultLimit` is omitted. */
   readLimit?: number
+  /** Lines returned when `read` omits `limit`; must not exceed `readLimit`. */
+  readDefaultLimit?: number
   /** Maximum characters returned for a single line before truncation. */
   readMaxLineLength?: number
   /** Maximum bytes returned for the selected lines of one `read` call. */
@@ -3975,11 +4008,13 @@ export interface Config {
 
 - `inject`: `tools` · `subagents` · `systemPrompt` · `sessionProjections`
 - `refs`: [`AgentOptions`](subsystems/core.md)
-- `source`: [`packages/subagent/tool-subagent/src/index.ts:48`](../packages/subagent/tool-subagent/src/index.ts)
+- `source`: [`packages/subagent/tool-subagent/src/index.ts:50`](../packages/subagent/tool-subagent/src/index.ts)
 
 ```ts config-catalog
 /** Config: which registered provider this tool delegates to, plus child defaults. */
 export interface Config {
+  /** Expose output_schema for foreground delegation to a structured-output-capable provider. Defaults to false. */
+  structuredOutput?: boolean
   /** The `ctx.subagents` provider name to start runs on (e.g. `spawn`, `acp`). */
   provider: string
   /**
@@ -4080,6 +4115,18 @@ export interface Config {
 ```ts config-catalog
 /** Plugin config: which web tools to register, search bounds, per-tool budgets, and the fetch output cap. */
 export interface Config {
+  /** Reuse identical normalized query batches within a caller-local TTL. Defaults to false. */
+  searchCache?: boolean
+  /** Enable caller-local cached Markdown windows for web_fetch. Defaults to false. */
+  fetchContext?: boolean
+  /** Maximum Markdown characters in a fetch window. Defaults to 12000. */
+  fetchContextChars?: number
+  /** Maximum cached results per caller and tool. Defaults to 16. */
+  cacheEntries?: number
+  /** Maximum retained UTF-8 bytes per caller and tool. Defaults to 1000000. */
+  cacheBytes?: number
+  /** Result reuse lifetime in milliseconds. Defaults to 60000. */
+  cacheTtlMs?: number
   /** Register `web_search`. Defaults to true. */
   search?: boolean
   /** Register `web_fetch`. Defaults to true. */
@@ -4109,6 +4156,8 @@ export interface Config {
 ```ts config-catalog
 /** Config: the model-facing tool name plus result rendering caps. */
 export interface Config {
+  /** Expose a per-run child budget and structured completion guidance. Defaults to false. */
+  executionControls?: boolean
   /** The model-facing tool name to register (default `workflow`). */
   toolName?: string
   /** Rendered-result ceiling, in characters: a longer JSON value is truncated with a notice (default 50000). */
@@ -4431,6 +4480,8 @@ export interface Config {
 ```ts config-catalog
 /** Plugin config (all optional — `static Config` supplies the defaults). */
 export interface Config {
+  /** Maximum live runs in this engine instance; 0 leaves admission uncapped. Defaults to 0. */
+  maxConcurrentRuns?: number
   /** The `ctx.subagents` provider children run on (default `spawn`). */
   provider?: string
   /** Concurrent `agent()` ceiling; `0` (the default) auto-resolves to `min(16, max(1, cores - 2))`. */
@@ -4583,7 +4634,6 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-session` | — | [`packages/core/session/src/index.ts`](../packages/core/session/src/index.ts) |
 | `@deepseek-ai/dsh-session-checkpoint-policy` | `llm` · `sessionPersistence` · `sessions` · `tools` | [`packages/session/session-checkpoint-policy/src/index.ts`](../packages/session/session-checkpoint-policy/src/index.ts) |
 | `@deepseek-ai/dsh-session-projection` | — | [`packages/session/session-projection/src/index.ts`](../packages/session/session-projection/src/index.ts) |
-| `@deepseek-ai/dsh-session-stats` | `sessionProjections` | [`packages/session/session-stats/src/index.ts`](../packages/session/session-stats/src/index.ts) |
 | `@deepseek-ai/dsh-session-turn-outline` | `sessionProjections` | [`packages/session/session-turn-outline/src/index.ts`](../packages/session/session-turn-outline/src/index.ts) |
 | `@deepseek-ai/dsh-settings` | `configEditor` · `profileContext` | [`packages/settings/settings/src/index.ts`](../packages/settings/settings/src/index.ts) |
 | `@deepseek-ai/dsh-skill-badge` | `skills` | [`packages/experimental/skill-badge/src/index.ts`](../packages/experimental/skill-badge/src/index.ts) |

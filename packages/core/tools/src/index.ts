@@ -731,11 +731,22 @@ interface ToolView {
  */
 export type ToolGuard = (execution: Readonly<ToolExecution>) => string | undefined
 
+/**
+ * Select and order a subset of native schemas without granting execution rights.
+ * Restrictions and execution guards remain authoritative; omitted schemas are
+ * still available to discovery through `schemas()`.
+ * @param scope - the scope requesting native tool definitions.
+ * @param schemas - definitions admitted by restrictions and preceding selectors.
+ * @returns unique names to advertise, in request order.
+ */
+export type ToolSchemaSelector = (scope: ScopeKey | undefined, schemas: readonly ToolSchema[]) => readonly string[]
+
 /** One scope's complete tool-registry contribution. */
 class ToolLayer implements ScopeLayer {
   readonly tools: NamedEntries<ToolDefinition>
   readonly restrictions = new AnonymousEntries<CompiledToolRestriction>()
   readonly guards = new AnonymousEntries<ToolGuard>()
+  readonly schemaSelectors = new AnonymousEntries<ToolSchemaSelector>()
   /**
    * Presentation this scope's agent declared for itself, shadowing the
    * deployment default. One cell rather than an entry table: two answers to
@@ -752,7 +763,7 @@ class ToolLayer implements ScopeLayer {
   /** Whether every contribution table in this aggregate layer is empty. */
   isEmpty(): boolean {
     return this.tools.isEmpty() && this.restrictions.isEmpty() && this.guards.isEmpty()
-      && this.mode === undefined
+      && this.schemaSelectors.isEmpty() && this.mode === undefined
   }
 
   /** Whether every compiled restriction in this layer admits a global tool name. */
@@ -1018,7 +1029,19 @@ export class ToolRuntime extends Service {
     const view = this.view(scope)
     const mode = this.modeFor(scope)
     if (mode === 'native') {
-      const schemas = [...view.visible.values()].map(definition => this.schemaOf(definition, false))
+      let schemas = [...view.visible.values()].map(definition => this.schemaOf(definition, false))
+      for (const layer of this.layers.chainLayers(scope)) {
+        for (const select of layer.schemaSelectors.values()) {
+          const available = new Map(schemas.map(schema => [schema.name, schema]))
+          const names = select(scope, schemas)
+          if (new Set(names).size !== names.length) throw new Error('tools.selectSchemas() returned duplicate names')
+          schemas = names.map((name) => {
+            const schema = available.get(name)
+            if (schema === undefined) throw new Error(`tools.selectSchemas() returned unavailable tool "${name}"`)
+            return schema
+          })
+        }
+      }
       return { schemas, knownNames: [...view.knownNames] }
     }
     // Validate the runtime language BEFORE projecting schemas: schemaOf reads
@@ -1145,6 +1168,18 @@ export class ToolRuntime extends Service {
       layer => layer.guards.append(guard),
       { label: 'tools.guard()', notify: false },
     )
+  }
+
+  /**
+   * Select native request schemas for a scope and its descendants. This is a
+   * presentation choice, not permission: execution still applies restrictions
+   * and guards, and discovery can inspect every admitted schema with `schemas()`.
+   * @param select - pure subset selector, evaluated on each request assembly.
+   * @returns the exact disposer restoring the inherited schema presentation.
+   */
+  selectSchemas(select: ToolSchemaSelector): () => void {
+    if (scopeOf(this.ctx) === undefined) throw new Error('tools.selectSchemas() requires a scoped context')
+    return this.layers.effect(this.ctx, layer => layer.schemaSelectors.append(select), { label: 'tools.selectSchemas()' })
   }
 
   /** First monotonic denial from the global then the scope chain's guard layers, farthest first. */

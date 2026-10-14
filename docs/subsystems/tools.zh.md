@@ -551,6 +551,15 @@ restrict(filter: ToolRestriction): () => void
 guard(guard: ToolGuard): () => void
 
 /**
+ * Select native request schemas for a scope and its descendants. This is a
+ * presentation choice, not permission: execution still applies restrictions
+ * and guards, and discovery can inspect every admitted schema with `schemas()`.
+ * @param select - pure subset selector, evaluated on each request assembly.
+ * @returns the exact disposer restoring the inherited schema presentation.
+ */
+selectSchemas(select: ToolSchemaSelector): () => void
+
+/**
  * Look up a tool as one scope sees it (scoped
  * shadows global; a restricted-away global reads as absent). Presenters pass
  * the calling agent so the rendered card matches the definition that

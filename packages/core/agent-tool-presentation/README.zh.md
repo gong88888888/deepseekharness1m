@@ -38,8 +38,16 @@ kind: "package-reference"
 | 字段 | 默认值 | 含义 |
 |---|---|---|
 | `mode` | 必填 | `native`——每个 schema；`ptc`——`run_code` 加生成 SDK |
+| `discovery` | `false` | 在 native 模式中仅展示初始工具与发现工具；成功写入日志的结果使后续请求增加 schema。 |
+| `initialTools` | `[]` | 发现前可用的原生工具名称。 |
+| `discoveryMaxResults` | `5` | 一次发现调用返回的定义数量上限。 |
+| `discoveryDescriptionChars` | `160` | 每个匹配描述的预览字符上限。 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-agent-tool-presentation)是每个受支持字段的穷尽式真源。`mode` 是必填而非有默认值，因为不带这一行的 preset 会继承部署默认值。
+
+### 原生工具发现
+
+将 `discovery: true` 与 `mode: native` 配合，模型就能按需加载已获准的工具定义。发现结果写入 Session，重放时据此恢复已加载集合；当前注册表仍决定执行权限。PTC 模式不支持此选项。
 
 ### PTC 模式需要什么
 
@@ -67,7 +75,8 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 插件入口：`mode` 配置、把 `ctx.tools.presentAs` 接到挂载作用域的 `apply` |
+| [`src/index.ts`](src/index.ts) | 插件入口：`mode` 与发现配置、把 `ctx.tools.presentAs` 接到挂载作用域的 `apply` |
+| [`src/discovery.ts`](src/discovery.ts) | 根据 Session 选择原生 schema，并注册 `tool_discover` 工具 |
 
 ### 行为说明
 

@@ -96,6 +96,10 @@ A tool can retain pure `presentCall()` and `presentResult()` methods for Host-lo
 
 -----
 
+### Efficiency controls
+
+`selectSchemas()` installs an effect-scoped native-schema selector. Selectors may only choose unique names from their admitted input and run in scope-chain order. They change advertised definitions, not execution rights: `schemas()` still returns the admitted discovery catalog, while restrictions and execution guards remain authoritative. Unloading the registering fiber removes its selector.
+
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 

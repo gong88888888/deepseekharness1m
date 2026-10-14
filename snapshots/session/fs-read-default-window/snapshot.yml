@@ -1,0 +1,8 @@
+version: 1
+scenario: fs-read-default-window
+profile: headless
+composition: fs-read-default-window
+recording: authored
+header:
+  class: fs-read-default-window
+  pin: true

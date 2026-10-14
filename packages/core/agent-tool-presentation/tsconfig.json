@@ -8,6 +8,9 @@
     "src"
   ],
   "references": [
+    { "path": "../agent" },
+    { "path": "../session" },
+    { "path": "../scope" },
     {
       "path": "../../../vendor/cosmokit"
     },

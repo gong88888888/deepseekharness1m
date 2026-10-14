@@ -45,7 +45,7 @@ The policy plugin is optional: without it the tools run against the bare provide
 
 | Tool | Arguments | Behavior |
 |---|---|---|
-| `read` | `file_path`, `offset?`, `limit?` | Line-numbered UTF-8 content with a pagination footer; `offset` is 1-based and `limit` defaults to and caps at the configured `readLimit` |
+| `read` | `file_path`, `offset?`, `limit?` | Line-numbered UTF-8 content with a pagination footer; `offset` is 1-based and `limit` defaults to `readDefaultLimit` (or `readLimit` when omitted), capped at `readLimit` |
 | `read_image` | `file_path` | Reads and persists a PNG/JPEG/WebP/GIF source; an extension-less path (normalized attachment object paths included) is identified from its file signature; normalization can downscale it before the next model request, so the model need not create a thumbnail first |
 | `write` | `file_path`, `content` | Creates or fully replaces a file; with the policy plugin, overwriting requires a prior `read` at the unchanged version, creating does not |
 | `edit` | `file_path`, `old_string`, `new_string`, `replace_all?` | Literal replacement requiring a unique match unless `replace_all` is true; with the policy plugin, requires a prior `read` and an unchanged file |
@@ -58,7 +58,8 @@ All keys are optional; the defaults are the shipped read caps.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `readLimit` | `2000` | Default and maximum lines returned by one `read` call |
+| `readLimit` | `2000` | Maximum lines returned by one `read` call |
+| `readDefaultLimit` | `readLimit` | Lines selected when the model omits `limit`; a positive integer no greater than `readLimit` |
 | `readMaxLineLength` | `2000` | Characters kept per line before truncation |
 | `readMaxBytes` | `51200` | Byte cap on one `read` call's selected lines; overflow ends the window with a capped footer |
 | `readStreamMinSize` | `10485760` | Files at or above this size (or of unknown size) stream instead of loading whole into memory |

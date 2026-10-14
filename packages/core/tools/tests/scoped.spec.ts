@@ -118,6 +118,33 @@ describe('scoped tool registration', () => {
 })
 
 describe('restrict()', () => {
+  it('selects native schemas without widening restrictions or changing execution', async () => {
+    const ctx = await mount()
+    const { scope, key } = await mintAgentScope(ctx, 'discovery')
+    ctx.tools.register(tool('read'))
+    ctx.tools.register(tool('write'))
+    const dispose = scope.ctx.tools.selectSchemas(() => ['read'])
+    expect((await ctx.systemPrompt.assemble({ scope: key })).tools.map(t => t.name)).toEqual(['read'])
+    expect(ctx.tools.schemas(key).map(t => t.name)).toEqual(['read', 'write'])
+    expect(await run(ctx, 'write', key)).toBe('ran:write')
+    expect((await ctx.systemPrompt.assemble({})).tools.map(t => t.name)).toEqual(['read', 'write'])
+    dispose()
+    expect((await ctx.systemPrompt.assemble({ scope: key })).tools).toHaveLength(2)
+    scope.ctx.tools.restrict({ allow: ['read'] })
+    scope.ctx.tools.selectSchemas(() => ['write'])
+    await expect(ctx.systemPrompt.assemble({ scope: key })).rejects.toThrow(/unavailable/)
+    expect(await run(ctx, 'write', key)).toContain('unknown tool')
+  })
+
+  it('rejects global selectors and duplicate selected names', async () => {
+    const ctx = await mount()
+    expect(() => ctx.tools.selectSchemas(() => [])).toThrow()
+    const { scope, key } = await mintAgentScope(ctx, 'duplicates')
+    ctx.tools.register(tool('read'))
+    scope.ctx.tools.selectSchemas(() => ['read', 'read'])
+    await expect(ctx.systemPrompt.assemble({ scope: key })).rejects.toThrow(/duplicate/)
+  })
+
   it('masks global tools, merges scope-local tools afterward, and keeps assembly with execution', async () => {
     const ctx = await mount()
     const { scope, key } = await mintAgentScope(ctx, 'a')

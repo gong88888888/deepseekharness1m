@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-09-efficient-code-context.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-09-efficient-code-context.md
+/agent-note-bounded-initial-code-reads-and-detached-token-measurements:
+  en: 65751dd3d6310b15
+  zh: ff3f6073ebeb1640
+/agent-note-bounded-initial-code-reads-and-detached-token-measurements/problem:
+  en: e872c611cef60129
+  zh: 07b18ace6832ff68
+/agent-note-bounded-initial-code-reads-and-detached-token-measurements/decision:
+  en: 61705c4b032855b7
+  zh: 9c2a89bd7e586790
+/agent-note-bounded-initial-code-reads-and-detached-token-measurements/alternatives-considered:
+  en: 34e87b0051353a8c
+  zh: a14eacb2b792b0e4
+/agent-note-bounded-initial-code-reads-and-detached-token-measurements/consequences:
+  en: dcddc58be4c32dba
+  zh: f78a596f91fc0d2b
+/agent-note-bounded-initial-code-reads-and-detached-token-measurements/testing:
+  en: ad6925462a4b4022
+  zh: 2a12268701709490

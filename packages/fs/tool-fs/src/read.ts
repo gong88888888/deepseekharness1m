@@ -22,8 +22,10 @@ export const STREAM_MIN_SIZE = 10 * 1024 * 1024
 
 /** Resolved read-tool caps — plugin config after defaulting (see `Config` in index.ts). */
 export interface ReadToolCaps {
-  /** Default and maximum number of lines returned by one call. */
+  /** Maximum number of lines returned by one call. */
   limit: number
+  /** Number of lines returned when the model omits `limit`. */
+  defaultLimit: number
   /** Maximum characters returned for a single line. */
   maxLineLength: number
   /** Maximum bytes returned for selected file lines. */
@@ -49,13 +51,18 @@ function parsePositiveInteger(value: number, name: string): number {
 /**
  * Validate value constraints the schema DSL can't express. `maxLimit` is the deployment's line cap.
  * @param args - the schema-validated raw tool arguments; `offset`/`limit` must be positive integers when given.
- * @param maxLimit - the configured line cap: both the default `limit` and the largest one accepted.
- * @returns the validated input with `offset` defaulted to 1 and `limit` to `maxLimit`.
+ * @param maxLimit - the largest line count accepted.
+ * @param defaultLimit - resolved default line count, at most `maxLimit`.
+ * @returns the validated input with `offset` defaulted to 1 and `limit` to `defaultLimit`.
  */
-export function parseReadArgs(args: { file_path: string; offset?: number; limit?: number }, maxLimit: number): ReadInput {
+export function parseReadArgs(
+  args: { file_path: string; offset?: number; limit?: number },
+  maxLimit: number,
+  defaultLimit: number,
+): ReadInput {
   if (args.file_path.trim().length === 0) throw new Error('file_path must be a non-empty string')
   const offset = args.offset === undefined ? 1 : parsePositiveInteger(args.offset, 'offset')
-  const limit = args.limit === undefined ? maxLimit : parsePositiveInteger(args.limit, 'limit')
+  const limit = args.limit === undefined ? defaultLimit : parsePositiveInteger(args.limit, 'limit')
   if (limit > maxLimit) throw new Error(`limit must be less than or equal to ${maxLimit}`)
   return { filePath: args.file_path, offset, limit }
 }
@@ -80,7 +87,7 @@ export function applyReadTool(ctx: Context, caps: ReadToolCaps): void {
     parameters: {
       file_path: { type: 'string', required: true, description: 'Path to read, resolved by the filesystem backend.' },
       offset: { type: 'number', description: '1-based first line to return. Defaults to 1.' },
-      limit: { type: 'number', description: `Maximum number of lines to return. Defaults to ${caps.limit}.` },
+      limit: { type: 'number', description: `Maximum number of lines to return. Defaults to ${caps.defaultLimit}.` },
     },
     output: {
       schema: {
@@ -105,7 +112,7 @@ export function applyReadTool(ctx: Context, caps: ReadToolCaps): void {
         },
       },
       render: (args, value) => {
-        const input = parseReadArgs(args, caps.limit)
+        const input = parseReadArgs(args, caps.limit, caps.defaultLimit)
         const endLine = value.lines.at(-1)?.number ?? Math.max(0, value.offset - 1)
         const truncatedByBytes = value.lines.length < input.limit && endLine < value.totalLines
         return [{
@@ -135,7 +142,7 @@ export function applyReadTool(ctx: Context, caps: ReadToolCaps): void {
     // Observation races fail closed because guarded mutations re-check the version in-lock.
     isConcurrencySafe: () => true,
     async execute(args, exec) {
-      const input = parseReadArgs(args, caps.limit)
+      const input = parseReadArgs(args, caps.limit, caps.defaultLimit)
       // One stat: absence observation OR type check + size routing + present version.
       // A concurrent write can only make a later guarded mutation fail stale and require reread.
       const { target, info } = await resolveRegularReadTarget(ctx, exec, input.filePath)

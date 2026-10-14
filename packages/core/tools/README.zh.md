@@ -96,6 +96,10 @@ ctx.tools.register(defineTool({
 
 -----
 
+### 效率控制
+
+`selectSchemas()` 安装随作用域释放的原生工具定义选择器。选择器只能从已准入的输入中选取不重复的名称，并按作用域链顺序运行。它只改变向模型展示的定义；`schemas()` 仍返回准入后的发现目录，工具限制和执行守卫继续决定调用权限。卸载注册插件会移除选择器。
+
 <a id="understand-the-implementation"></a>
 ## 理解实现
 

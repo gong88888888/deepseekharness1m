@@ -23,6 +23,7 @@ import z from '@deepseek-ai/schemastery'
 import type { ToolPresentationMode } from '@deepseek-ai/dsh-tools'
 // Type-only: brings the `ctx.tools` Context merge into this program.
 import type {} from '@deepseek-ai/dsh-tools'
+import { applyDiscovery } from './discovery.ts'
 
 /** Cordis plugin name. */
 export const name = 'tool-presentation'
@@ -44,11 +45,23 @@ export interface Config {
    * composed for nothing.
    */
   mode: ToolPresentationMode
+  /** Enable session-local native tool discovery. Defaults to false. */
+  discovery?: boolean
+  /** Native schemas advertised initially when discovery is enabled. Defaults to an empty list. */
+  initialTools?: string[]
+  /** Maximum definitions loaded by one discovery call. Defaults to 5. */
+  discoveryMaxResults?: number
+  /** Maximum description characters returned per discovery match. Defaults to 160. */
+  discoveryDescriptionChars?: number
 }
 
 /** Runtime schema. */
 export const Config: z<Config> = z.object({
   mode: z.union(['native', 'ptc'] as const).required(),
+  discovery: z.boolean().default(false),
+  initialTools: z.array(z.string()),
+  discoveryMaxResults: z.number().step(1).min(1).default(5),
+  discoveryDescriptionChars: z.number().step(1).min(1).default(160),
 })
 
 /**
@@ -57,11 +70,20 @@ export const Config: z<Config> = z.object({
  * @param config - the selected presentation.
  */
 export function apply(ctx: Context, config: Config): void {
+  if (config.discovery === true && config.mode !== 'native') {
+    throw new Error('tool-presentation: initialTools requires native mode')
+  }
   // `presentAs` is itself the effect — it registers through the calling
   // context and hands back that exact disposer — so the declaration unwinds
   // with this row without a second wrapper owning it.
   if (config.mode === 'native') {
     ctx.tools.presentAs('native')
+    if (config.discovery === true) {
+      const initial = config.initialTools ?? []
+      ctx.inject(['agents'], (discoveryCtx) => {
+        applyDiscovery(discoveryCtx, initial, config.discoveryMaxResults ?? 5, config.discoveryDescriptionChars ?? 160)
+      })
+    }
     return
   }
   // The wait is the loud failure: an entry still pending on `ptcRuntime` is

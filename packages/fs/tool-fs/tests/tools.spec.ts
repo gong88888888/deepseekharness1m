@@ -741,9 +741,35 @@ describe('read caps are plugin config', () => {
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(FakeFs)
     await ctx.plugin(FsPolicy)
-    await ctx.plugin(ToolFs, config)
-    return { ctx, fs: ctx.fs as FakeFs }
+    const fiber = await ctx.plugin(ToolFs, config)
+    return { ctx, fs: ctx.fs as FakeFs, fiber }
   }
+
+  it('uses a smaller default window while accepting explicit reads up to the maximum', async () => {
+    const { ctx, fs, fiber } = await setupWith({ readLimit: 4, readDefaultLimit: 2 })
+    try {
+      fs.files.set('key:a.txt', 'one\ntwo\nthree\nfour\nfive')
+      const first = await call(ctx, 'read', { file_path: 'a.txt' })
+      expect(text(first)).toContain('(Showing lines 1-2 of 5. Use offset=3 to continue.)')
+      expect(text(first)).not.toContain('three')
+      const continuation = await call(ctx, 'read', { file_path: 'a.txt', offset: 3 })
+      expect(text(continuation)).toContain('3: three')
+      expect(text(continuation)).toContain('4: four')
+      const expanded = await call(ctx, 'read', { file_path: 'a.txt', limit: 4 })
+      expect(text(expanded)).toContain('4: four')
+      const overCap = await call(ctx, 'read', { file_path: 'a.txt', limit: 5 })
+      expect(overCap.isError).toBe(true)
+      expect(text(overCap)).toContain('less than or equal to 4')
+      expect(JSON.stringify(ctx.tools.schemas().find(s => s.name === 'read'))).toContain('Defaults to 2.')
+    } finally {
+      await fiber.dispose()
+    }
+  })
+
+  it('rejects a default read window larger than its maximum', async () => {
+    await expect(setupWith({ readLimit: 2, readDefaultLimit: 3 }))
+      .rejects.toThrow('readDefaultLimit must not exceed readLimit')
+  })
 
   it('a configured readLimit is both the default and the cap, and the schema names it', async () => {
     const { ctx, fs } = await setupWith({ readLimit: 2 })
@@ -789,6 +815,8 @@ describe('read caps are plugin config', () => {
   it.each([
     ['readLimit', { readLimit: 0 }],
     ['readLimit', { readLimit: 2.5 }],
+    ['readDefaultLimit', { readDefaultLimit: 0 }],
+    ['readDefaultLimit', { readDefaultLimit: 1.5 }],
     ['readMaxLineLength', { readMaxLineLength: -1 }],
     ['readMaxBytes', { readMaxBytes: Number.NaN }],
     ['readStreamMinSize', { readStreamMinSize: 0 }],

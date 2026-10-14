@@ -38,8 +38,16 @@ Add this row to an agent preset to fix how every agent joined to that preset see
 | Field | Default | Meaning |
 |---|---|---|
 | `mode` | required | `native` — every schema; `ptc` — `run_code` plus generated SDK |
+| `discovery` | `false` | In native mode, advertise only initial tools and a discovery tool; successful logged results add schemas on later requests. |
+| `initialTools` | `[]` | Native tool names available before discovery. |
+| `discoveryMaxResults` | `5` | Maximum definitions returned by one discovery call. |
+| `discoveryDescriptionChars` | `160` | Maximum preview characters per matching description. |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-agent-tool-presentation) is the exhaustive source for every accepted field. `mode` is required rather than defaulted because a preset without this row inherits the deployment default.
+
+### Native tool discovery
+
+Set `discovery: true` with `mode: native` to let the model load authorized tool definitions as needed. The discovery result is recorded in the Session; replay derives the loaded set, and the current registry still controls execution rights. This option does not apply to PTC mode.
 
 ### What PTC mode requires
 
@@ -67,7 +75,8 @@ The tool registry cannot move into a preset: its consumers are all host-plane �
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Plugin entry: `mode` config, `apply` wiring `ctx.tools.presentAs` for the mounting scope |
+| [`src/index.ts`](src/index.ts) | Plugin entry: `mode` and discovery config, with `ctx.tools.presentAs` for the mounting scope |
+| [`src/discovery.ts`](src/discovery.ts) | Session-derived native schema selection and the `tool_discover` tool |
 
 ### Behavior notes
 

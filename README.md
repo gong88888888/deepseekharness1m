@@ -1,82 +1,56 @@
-# DeepSeek Harness (项目说明)
+# DeepSeek Harness 1M
 
-English summary below | 中文说明
+This is a development fork of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). The source code described here is on the [`codex/github-upload-candidate` branch](https://github.com/gong88888888/deepseekharness1m/tree/codex/github-upload-candidate).
 
-DeepSeek Harness（简称 dsh）是一个面向可扩展、多插件化的 agent harness 框架，基于 "everything-is-a-plugin" 的设计理念，由 DeepSeek AI 开发与维护（本仓库为个人镜像/分支）。本分支：codex/github-upload-candidate 仅更新了 README 与若干文档以便上传/展示。
+The branch includes token-efficiency changes and configures a 1,000,000-token context window for its default DeepSeek model entries. The context window is a local model configuration; the actual context accepted by a request depends on the model service and its availability.
 
-核心要点
+## Requirements
 
-- 架构：以插件为中心（Service Definition + provider 模型），方便扩展模型适配器、工具、沙箱、子代理等能力。
-- 运行时：使用 Cordis 作为运行时设计灵感（参见 upstream 设计文档）。
-- 状态：开发者预览（developer preview）；接口和行为可能发生不兼容的变动，请在生产环境使用前评估风险并查看安全说明。
+- Node.js 24.x is recommended. The repository also supports Node.js 22.19 or newer within the 22.x line. Node.js 20 is unsupported.
+- Git 2.26 or newer.
+- pnpm 11.28.5.
+- A DeepSeek API key is needed to make model requests, but not to install or start the Web UI.
 
-快速开始
+## Download, build, and run
 
-从 npm 运行（推荐本地快速体验）：
+Install Node.js and Git first. Then run these commands in PowerShell or a terminal:
 
-```bash
-# 使用 npx 直接运行 Web UI
-npx @deepseek-ai/dsh web
-```
-
-默认会在本地启动 Web UI（默认地址：http://127.0.0.1:3080）。
-
-从源码运行（适用于开发与调试）：
-
-```bash
-git clone https://github.com/deepseek-ai/deepseek-harness.git
-cd deepseek-harness
-pnpm install
+```sh
+npm install -g pnpm@11.28.5
+git clone --depth 1 --single-branch --branch codex/github-upload-candidate https://github.com/gong88888888/deepseekharness1m.git
+cd deepseekharness1m
+pnpm install --frozen-lockfile
 pnpm run build
 pnpm dsh web
 ```
 
-- `pnpm run build` 会构建仓库产物。
-- `pnpm dsh web` 使用构建好的产物来启动服务（不会重复构建）。
+Open the local URL printed by `pnpm dsh web`. In the Web UI, open **Settings → Models**, enter your DeepSeek API key, and select a workspace.
 
-仓库结构概览（与本分支相关）
+Use `pnpm dsh web --no-open` if you do not want the browser to open automatically. Run `pnpm dsh --help` to see the other available profiles and commands.
 
-- README.md — 本文件（项目总览与快速入门）。
-- native/ — 本仓库托管并维护的 native 源码与平台包（例如 Landlock 启动器与 POSIX 绑定）。请参阅 native/README.md 获取更多平台细节。
-- packages/ — npm 包工作区，按照功能族分组（core、llm、web、sandbox、session 等），各子目录包含对应 package 的 README 与使用约定。详细分组与职责请参阅 packages/README.md。
-- docs/ — 架构、开发与使用的详细文档（如果存在）。
+Clone the repository with Git rather than using GitHub's **Download ZIP** button. The build reads the source commit from Git metadata, which a ZIP download does not contain.
 
-重要文档与资源
+## Update an existing installation
 
-- 上游文档（官方）：https://deepseek-harness.github.io/deepseek-harness/ 
-- 安全须知：请在运行前阅读 SAFETY.md（仓库中如存在）。
-- 贡献指南：CONTRIBUTING.md
-- 第三方许可证声明：THIRD_PARTY_NOTICES.md
+From the `deepseekharness1m` directory:
 
-开发者提示
-
-- 本仓库采用 pnpm 工作区管理（packages/ 与 system/ 等子包共享同一 lockfile）。
-- 本项目包含原生模块（Node Addon），CI 会针对支持的架构构建并测试本地原生包。发布流程会将各架构的产物打包为 npm tarball。
-- 插件与扩展：为便于插件发现，请在插件仓库打上 `dsh-plugin` topic。
-
-贡献与社区
-
-- 问题与反馈：使用上游仓库的 Discussions / Issues（若本仓库为镜像，请在原仓库提 issue）。
-- 社区：DeepSeek Harness 社区（例如 Discord 链接，见官方文档）。
-
-引用（Citation）
-
-```bibtex
-@misc{deepseek-harness2026,
-  title={DeepSeek Harness: Everything is a Plugin},
-  author={DeepSeek-AI},
-  year={2026},
-  publisher={GitHub},
-  howpublished={\url{https://github.com/deepseek-ai/deepseek-harness}},
-}
+```sh
+git pull --ff-only
+pnpm install --frozen-lockfile
+pnpm run build
+pnpm dsh web
 ```
 
-许可证
+If `node --version` reports Node.js 20, switch to a supported Node.js version before running pnpm. Check that `pnpm --version` reports `11.28.5`.
 
-本仓库使用 MIT 许可证（参见 LICENSE）。第三方依赖及其许可证请查看 THIRD_PARTY_NOTICES.md。
+## About the npm package
 
-本次变更说明
+This fork has not been published as an npm package. `npx @deepseek-ai/dsh web` runs the upstream npm release; it does not install the changes from this branch. Use the Git clone and source commands above to run this fork.
 
-- 重写并精简 README，以匹配仓库中 native/ 与 packages/ 的现有说明，保留上游入口与关键链接。
+## Documentation and safety
 
-如果你希望我把 README 同步为英文优先版、或添加更多运行示例、CI/发布说明、或按包生成的子 README 汇总页，请告诉我，我会继续把更新提交到本分支。
+Read the [Web UI guide](docs/user/guide/index.md), [development guide](docs/development.md), and [safety notice](SAFETY.md). Keep API keys out of the repository and Git commits. The Web UI stores a saved key in the local Harness home rather than in this checkout.
+
+## License
+
+[MIT](LICENSE). Third-party notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

@@ -21,6 +21,21 @@ export function record(value: SessionFormatJsonValue | undefined, label: string)
 }
 
 /**
+ * The V2 Mnemon plugin recorded a display summary on instruction and recall messages.
+ * Frozen source validation checks a private view; migration retains the original source.
+ * @param event - historical event to validate.
+ * @returns the event with only that historical summary omitted from the validation view.
+ */
+export function mnemonSourceValidationView(event: SessionFormatEvent): SessionFormatEvent {
+  if (event.type !== 'user/message' || !isSessionFormatJsonObject(event.data)) return event
+  const source = event.data['source']
+  if (!isSessionFormatJsonObject(source) || source['kind'] !== 'plugin' || source['plugin'] !== 'dsh-mnemon'
+    || (source['form'] !== 'instructions' && source['form'] !== 'recall') || typeof source['summary'] !== 'string') return event
+  const validationSource = Object.fromEntries(Object.entries(source).filter(([name]) => name !== 'summary'))
+  return { ...event, data: { ...event.data, source: validationSource } }
+}
+
+/**
  * Reject missing and unaudited members rather than guessing whether they contain coordinates.
  * @param value - decoded record.
  * @param required - required member names.
@@ -68,7 +83,7 @@ export function assertEvent(event: SessionFormatEvent, version: 2 | 3): void {
   keys(data, admitted.required, admitted.optional, event.type + ' data')
   assertOwnedContent(event, data)
   // Assistant attempts are introduced by V2; the V0 helper has no case for them.
-  if (event.type !== 'assistant/attempt') assertReleasedPayloadSemantics(event, version)
+  if (event.type !== 'assistant/attempt') assertReleasedPayloadSemantics(mnemonSourceValidationView(event), version)
   if (event.type === 'assistant/message' || event.type === 'assistant/attempt') {
     for (const coordinate of ['turn', 'step']) {
       if (sessionFormatCount(data[coordinate], coordinate) === 0) throw new SessionFormatError(coordinate + ' must be positive')

@@ -56,6 +56,20 @@ describe('canonical V4 integration', () => {
     expect(JSON.stringify(target)).toBe(before)
   })
 
+  it.each(['instructions', 'recall'])('restores V2 Mnemon %s summaries through V4 without changing message text', (form) => {
+    const original = source()
+    const historical = { kind: 'plugin', plugin: 'dsh-mnemon', form, summary: 'Memory context' }
+    const rows = original.map(row => row.seq === 3
+      ? { ...row, data: { ...(row.data as Record<string, unknown>), source: historical } }
+      : row)
+    const restore = createSessionFormatCatalogWithChildren([]).createRestore(header, { recovery: 'strict', validation: 'current' })
+    for (const row of rows) restore.decodeRow(row)
+    const target = restore.finish()
+    expect(target.events.find(event => event.type === 'user/message' && (event.data as { id?: string }).id === 'context')?.data)
+      .toMatchObject({ source: { kind: 'plugin:dsh-mnemon', form, summary: 'Memory context' }, content: [{ type: 'text', text: 'context' }] })
+    expect(reopen(target)).toEqual(target)
+  })
+
   it.each([{ sourceEventSeqs: [] }, { surfaceOp: { op: 'replace', start: 0, end: 0 } }])('rejects noncanonical native metadata %j', (override) => {
     const target = migrated()
     const system = target.events.find(event => event.type === 'system/message')!

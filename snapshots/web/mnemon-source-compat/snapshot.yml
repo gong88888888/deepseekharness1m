@@ -1,0 +1,10 @@
+version: 1
+scenario: mnemon-source-compat
+profile: web
+composition: web-default
+recording: authored
+sessionFormat:
+  version: 2
+  coverage: [adjacent-migration]
+header:
+  class: web-default

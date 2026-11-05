@@ -497,3 +497,24 @@ describe('v3 PTC event admission and relationships', () => {
     expect(() => restoreReleasedV3Artifact(artifact([turn, obsolete, settle]), new Set())).toThrow(/no unique start/)
   })
 })
+
+describe('historical Mnemon source admission', () => {
+  it.each(['instructions', 'recall'])('retains the %s summary without changing the source event', (form) => {
+    const source = { kind: 'plugin', plugin: 'dsh-mnemon', form, summary: 'Memory context' }
+    const input = deepFreeze([...opening(), event('user/message', { ...user('mnemon'), source }, 'append')])
+    const target = migrate(input)
+    expect(target.events.find(value => value.type === 'user/message')?.data).toMatchObject({ source })
+    expect((input[2]?.data as SessionFormatJsonObject)['source']).toEqual(source)
+  })
+
+  it('keeps the exception limited to Mnemon user instructions and recall', () => {
+    for (const source of [
+      { kind: 'plugin', plugin: 'other', form: 'instructions', summary: 'Memory context' },
+      { kind: 'plugin', plugin: 'dsh-mnemon', form: 'catalog', summary: 'Memory context' },
+      { kind: 'plugin', plugin: 'dsh-mnemon', form: 'instructions', summary: 1 },
+    ]) {
+      expect(() => migrate([...opening(), event('user/message', { ...user('mnemon'), source }, 'append')]))
+        .toThrow(/summary requires notice form/)
+    }
+  })
+})

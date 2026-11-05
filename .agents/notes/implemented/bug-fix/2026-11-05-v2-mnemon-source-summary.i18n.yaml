@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-11-05-v2-mnemon-source-summary.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-11-05-v2-mnemon-source-summary.md
+/agent-note-restore-v2-mnemon-summaries-without-changing-message-sources:
+  en: 350d4da2f0fd6c01
+  zh: 7c5cf7e045c712d6
+/agent-note-restore-v2-mnemon-summaries-without-changing-message-sources/problem:
+  en: e3f0eb96d3ff80c6
+  zh: 3bd2b5a1b82996d6
+/agent-note-restore-v2-mnemon-summaries-without-changing-message-sources/decision:
+  en: 22e6cea4ba9a9912
+  zh: 3d497f057f2119b2
+/agent-note-restore-v2-mnemon-summaries-without-changing-message-sources/alternatives-considered:
+  en: adf76b89e0dae58c
+  zh: 1eddbf4f9345f7b4
+/agent-note-restore-v2-mnemon-summaries-without-changing-message-sources/verification:
+  en: f41133ed812c96cd
+  zh: 2e36031d1b8cae28
+/agent-note-restore-v2-mnemon-summaries-without-changing-message-sources/consequences:
+  en: 95177798f00c4245
+  zh: 391c2367e1bda004

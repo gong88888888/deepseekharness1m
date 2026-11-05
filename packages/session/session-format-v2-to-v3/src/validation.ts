@@ -3,7 +3,7 @@
 import { SessionFormatError, SessionFormatUnsupportedMigrationError } from '@deepseek-ai/dsh-session-format'
 import type { SessionFormatArtifact, SessionFormatEvent, SessionFormatHeader } from '@deepseek-ai/dsh-session-format'
 import { assertReleasedV2Header, restoreReleasedV2Artifact } from '@deepseek-ai/dsh-session-format-v1-to-v2'
-import { assertV3Event, isRepairIdentity, record, SURFACE_TYPES } from './payload.ts'
+import { assertV3Event, isRepairIdentity, mnemonSourceValidationView, record, SURFACE_TYPES } from './payload.ts'
 
 /**
  * Validate v3 logical metadata with the released-v2 fields.
@@ -64,7 +64,7 @@ export function restoreReleasedV3Artifact(artifact: SessionFormatArtifact, known
       }
     }
     if (SURFACE_TYPES.has(event.type)) hasSurface = true
-    const projected = relationshipEvent(event)
+    const projected = mnemonSourceValidationView(relationshipEvent(event))
     if (!SURFACE_TYPES.has(event.type) || event['surfaceOp'] === 'append') return projected
     const replacement = event['surfaceOp'] as { readonly startSeq: number; readonly endSeq: number }
     // Only the frozen relationship view uses released endpoint names.

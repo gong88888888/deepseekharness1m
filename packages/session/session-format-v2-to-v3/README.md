@@ -119,6 +119,8 @@ A V2 `session-log-deepseek/delivery-accepted` with `data.sessionFormatVersion ==
 
 Migration classifies the [released V2 event inventory](../session-format-v1-to-v2/src/dispositions.ts), including log-only `assistant/attempt`, plus `feedback/message-put` and `feedback/message-delete`. The [payload validator](src/payload.ts) applies exact admitted envelope and payload members and released nested validation. Unknown events, even ignorable ones, and unaudited members at checked records are refused. Message-source classification covers the five Message slots below: unknown source kinds are refused, while agent relay attribution is admitted without interpreting ids as Session references.
 
+Historical `dsh-mnemon` V2 `user/message` sources may carry a string `summary` with `form: 'instructions'` or `form: 'recall'`. V2 admission and V3 relationship restoration omit that field only in a private validation view; the source, summary, and message content remain unchanged in the migrated artifact. Other plugins, message slots, forms, and malformed summaries retain the released refusal rules. V3-to-V4 source conversion retains this metadata under `kind: 'plugin:dsh-mnemon'` ([decision](../../../.agents/notes/implemented/bug-fix/2026-11-05-v2-mnemon-source-summary.md)).
+
 The content audit admits exactly `text`, `reasoning`, `image`, `file`, `tool-call`, and `tool-result`. It validates owned block fields and recursively audits every nested `tool-result.content` in this finite set of positions:
 
 | Owner | Audited content |

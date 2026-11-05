@@ -26,6 +26,7 @@ const snapshotAdapters = [
   'apps/web/tests/code-language.snapshot.ts',
   'apps/web/tests/message-feedback-protocol.snapshot.ts',
   'apps/web/tests/minimal-preset.snapshot.ts',
+  'apps/web/tests/mnemon-source-compat.snapshot.ts',
   'apps/web/tests/preset-migration.snapshot.ts',
   'apps/web/tests/subagent-fork-schedule.snapshot.ts',
   'snapshots/acp/acp.snapshot.ts',
@@ -210,7 +211,7 @@ it('keeps V3 replay input plus bounded declared historical migration coverage', 
   const summary = assertSnapshotCorpusPolicy(inventory)
   expect(summary.baselineRoles).toBeGreaterThan(0)
   expect(summary).toMatchObject({
-    retainedRoles: 13,
-    retainedScenarios: 10,
+    retainedRoles: 14,
+    retainedScenarios: 11,
   })
 })

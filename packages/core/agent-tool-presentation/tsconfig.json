@@ -8,9 +8,6 @@
     "src"
   ],
   "references": [
-    { "path": "../agent" },
-    { "path": "../session" },
-    { "path": "../scope" },
     {
       "path": "../../../vendor/cosmokit"
     },
@@ -22,6 +19,12 @@
     },
     {
       "path": "../../core/tools"
+    },
+    {
+      "path": "../tool-executor-native"
+    },
+    {
+      "path": "../tool-executor-ptc"
     }
   ]
 }

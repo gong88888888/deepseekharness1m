@@ -27,6 +27,7 @@ import {
 } from './sessions/history-records.ts'
 import type { SessionEventLikeEntry, SessionLiveEventEntry } from './contract/events.ts'
 import type { SessionRemotes } from './sessions/remotes.ts'
+import { assertSessionWireEvent } from './session-wire-event.ts'
 
 export {
   SESSION_SEARCH_RESULT_LIMIT,
@@ -177,10 +178,12 @@ export class SessionEventStream extends RemoteJournalStream<
     let assistantRevision: number | undefined
     for await (const frame of this.remote.session.follow({
       address: this.address,
+      activate: true,
       assistantStream: true,
-      ...(request.maxMessages === undefined ? {} : { maxMessages: request.maxMessages }),
+      ...this.repairRequest(request),
     }, signal)) {
       if (frame.type === 'snapshot') {
+        for (const record of frame.records) assertSessionWireEvent(record.event)
         if (frame.assistantStream === undefined) {
           throw new RemoteError(
             'gateway/internal',
@@ -212,6 +215,7 @@ export class SessionEventStream extends RemoteJournalStream<
         yield { type: 'notification', notification: frame.frame }
         continue
       }
+      assertSessionWireEvent(frame.event)
       yield { type: 'entry', entry: frame }
     }
   }
@@ -227,6 +231,7 @@ export class SessionEventStream extends RemoteJournalStream<
       signal,
     )
     if (!result.ok) throw result.error
+    for (const record of result.value.records) assertSessionWireEvent(record.event)
     return result.value
   }
 
@@ -234,6 +239,9 @@ export class SessionEventStream extends RemoteJournalStream<
   protected override repairRequest(
     request: ClientSessionPageRequest,
   ): ClientSessionPageRequest {
-    return request.maxMessages === undefined ? {} : { maxMessages: request.maxMessages }
+    return {
+      ...(request.maxMessages === undefined ? {} : { maxMessages: request.maxMessages }),
+      ...(request.turnWindow === undefined ? {} : { turnWindow: request.turnWindow }),
+    }
   }
 }

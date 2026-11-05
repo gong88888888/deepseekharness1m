@@ -4,9 +4,11 @@ Status: implemented
 
 [English](2026-08-04-configuration-source-ownership.md) | 中文
 
+下文的非秘密 settings 层已由 [profile 所属实时配置](2026-09-19-profile-owned-live-configuration.zh.md) 替代，凭据优先级已由[存储凭据优先级](2026-10-09-stored-credential-precedence.zh.md)替代。环境限制仍然适用。
+
 ## Problem
 
-`$DSH_HOME/.env` 刚刚[变成普通环境层](2026-08-04-credentials-yaml-and-user-environment-layer.zh.md)，这使得 harness 解析面向用户的值时面对的是一个压平的 `process.env`，再也说不清某个值来自哪里。由此产生三个后果。
+`$DSH_HOME/.env` 刚刚[变成普通环境层](../../archived/architecture/2026-08-04-credentials-yaml-and-user-environment-layer.md)，这使得 harness 解析面向用户的值时面对的是一个压平的 `process.env`，再也说不清某个值来自哪里。由此产生三个后果。
 
 通过 Web 页面存下的密钥仍然被用户自己 `.env` 里更旧的密钥遮蔽，因为凭据提供方是拿「环境」与自己的文件比较，而现在环境包含了那个文件。这次拆分本该消除的迁移死路，只是换了个位置。
 
@@ -28,7 +30,7 @@ explicit for this run     per-operation override, CLI argument
 ```
 
 
-settings 在 composition 之上，因为 [settings seam](2026-07-28-user-settings-seam.zh.md) 就是这么做的：插件把自己的 cordis entry config 注册为 `base` 层，用户 section 叠加其上，而 seam 无法区分某个值是 profile 的 bundle 设的，还是它的用户 patch 层或某个 `--patch` overlay 设的——它们都以 entry config 的形式抵达。产品 CLI（命令行界面）没有高于已存 settings 的手段，因此需要把某字段钉死、不被用户已存 settings 覆盖的部署方，应自带 bin 或 loader 配置树，或者干脆不挂载 settings 提供方。composition 仍然高于环境，所以 shell 里陈旧的 `DEEPSEEK_BASE_URL` 无法改写已配置的 endpoint。
+settings 在 composition 之上，因为 [settings seam](../../archived/architecture/2026-07-28-user-settings-seam.md) 就是这么做的：插件把自己的 cordis entry config 注册为 `base` 层，用户 section 叠加其上，而 seam 无法区分某个值是 profile 的 bundle 设的，还是它的用户 patch 层或某个 `--patch` overlay 设的——它们都以 entry config 的形式抵达。产品 CLI（命令行界面）没有高于已存 settings 的手段，因此需要把某字段钉死、不被用户已存 settings 覆盖的部署方，应自带 bin 或 loader 配置树，或者干脆不挂载 settings 提供方。composition 仍然高于环境，所以 shell 里陈旧的 `DEEPSEEK_BASE_URL` 无法改写已配置的 endpoint。
 
 **凭据保留一条更窄的独立顺序**，本 Note 不把它并入上表：
 
@@ -57,7 +59,6 @@ inherited process environment      (read-only, wins)
 - 含 `DSH_*`、`PATH`、`BROWSER` 或（在调用目录中）proxy 变量的 `.env` 会导致启动失败而不是被应用。把开关放在仓库 `.env` 里的开发者需要改放到 shell——这是一次刻意且响亮的破坏。
 - composition 不再会被陈旧的 shell endpoint 覆盖。但它仍然会被用户已存的 `settings.yaml` 覆盖，这是 settings seam 的分层方式，本 Note 不改变它；产品 CLI 没有高于它的标志，因此需要压过已存 settings 的部署方要自带 bin 或 loader 配置树。
 - 未解决的：各层仍然会被物化进 `process.env`，因此普通项目变量继续按子进程清洗规则抵达子进程。bootstrap 变量完全不能来自文件；环境包将其余变量仍可抵达子进程这一点记录为一项限制。
-- Exa 与 Perplexity 仍在加载时捕获密钥，而不是经凭据 seam。它们不再读裸 `process.env`——改为经受信层解析——但把它们改造成按请求解析凭据是另一件事。
 
 ## Alternatives considered
 

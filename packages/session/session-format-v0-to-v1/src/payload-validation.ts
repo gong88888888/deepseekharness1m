@@ -1,4 +1,6 @@
 import { SessionFormatError, sessionFormatCount, sessionFormatSafeInteger } from '@deepseek-ai/dsh-session-format'
+import { fourDigitYearEpoch } from '@deepseek-ai/dsh-util-time'
+import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
 import type {
   SessionFormatEvent,
   SessionFormatJsonValue,
@@ -489,7 +491,12 @@ function messageValue(
   if (role === undefined) literalValue(message['role'], ['system', 'user', 'assistant'], `${label} role`)
   else literalValue(message['role'], [role], `${label} role`)
   contentBlocksValue(message['content'], `${label} content`, version)
-  messageSourceValue(message['source'], `${label} source`, version, expected)
+  const source = releasedV0Record(message['source'], `${label} source`)
+  if (version < 2 && expected === 'user' && source['kind'] === 'goal' && source['change'] !== undefined) {
+    legacyGoalMessageValue(message, source, label)
+  } else {
+    messageSourceValue(source, `${label} source`, version, expected)
+  }
   if (expected === 'tool') {
     const content = message['content']
     const block = Array.isArray(content) && content.length === 1
@@ -499,6 +506,34 @@ function messageValue(
     if (block?.['type'] !== 'tool-result' || block['toolCallId'] !== source['callId']) {
       throw new SessionFormatError(`${label} must contain exactly one tool-result block`)
     }
+  }
+}
+
+function legacyGoalMessageValue(message: JsonRecord, source: JsonRecord, label: string): void {
+  assertReleasedV0Keys(source, ['kind', 'goalId', 'revision', 'round', 'change'], [], `${label} source`)
+  nonEmptyString(source['goalId'], `${label} source goalId`)
+  positiveIntegerValue(source['revision'], `${label} source revision`)
+  if (source['round'] !== 0) throw new SessionFormatError(`${label} legacy goal source round must be 0`)
+  const change = releasedV0Record(source['change'], `${label} source change`)
+  goalChangeValue(change, `${label} source change`)
+  const ref = releasedV0Record(
+    change['operation'] === 'clear' ? change['cleared'] : change['goal'],
+    `${label} source change ref`,
+  )
+  if (source['goalId'] !== ref['id'] || source['revision'] !== ref['revision']) {
+    throw new SessionFormatError(`${label} legacy goal source does not match its change`)
+  }
+  const payload = change['operation'] === 'clear'
+    ? { cleared: change['cleared'], clearedAt: change['clearedAt'] }
+    : {
+      goal: change['goal'],
+      roundsStarted: change['roundsStarted'],
+      createdAt: change['createdAt'],
+      updatedAt: change['updatedAt'],
+    }
+  const expected = [{ type: 'text', text: `<goal_state>${JSON.stringify(payload)}</goal_state>` }]
+  if (!deepEqualJson(message['content'], expected)) {
+    throw new SessionFormatError(`${label} legacy goal content does not match its change`)
   }
 }
 
@@ -892,10 +927,7 @@ function scheduleIdValue(value: SessionFormatJsonValue | undefined, label: strin
 }
 
 function instantValue(value: SessionFormatJsonValue | undefined, label: string): void {
-  if (typeof value !== 'string'
-    || !/^(?!0000)\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d\.\d{3}Z$/u.test(value)
-    || !Number.isFinite(Date.parse(value))
-    || new Date(Date.parse(value)).toISOString() !== value) {
+  if (typeof value !== 'string' || fourDigitYearEpoch(value).kind !== 'accepted') {
     throw new SessionFormatError(`${label} must be a canonical UTC instant`)
   }
 }
@@ -918,20 +950,32 @@ function modelRouteValue(value: SessionFormatJsonValue | undefined, label: strin
   nonEmptyString(route['model'], `${label} model`)
 }
 
+/** `subagent/descriptor` versions that format v0 logs contain. */
+export const SUBAGENT_DESCRIPTOR_VERSIONS: readonly number[] = [1, 2, 3]
+
 function subagentDescriptorValue(data: JsonRecord, label: string): void {
-  literalValue(data['version'], [3], `${label} version`)
+  literalValue(data['version'], SUBAGENT_DESCRIPTOR_VERSIONS, `${label} version`)
   nonEmptyString(data['provider'], `${label} provider`)
-  if (data['mode'] === 'one-shot') {
+  const composition = ['agentProvider', 'agentModel', 'persona', 'toolFilter']
+  if (data['version'] === 1) {
+    assertReleasedV0Keys(data, ['version', 'provider', 'label'], composition, `${label} data`)
+  } else if (data['mode'] === 'one-shot') {
     assertReleasedV0Keys(data, ['mode', 'version', 'provider'], ['label'], `${label} data`)
     if (data['label'] !== undefined) stringValue(data['label'], `${label} label`)
     return
+  } else {
+    literalValue(data['mode'], ['continuable'], `${label} mode`)
+    const optional = data['version'] === 3 ? [...composition, 'agentReasoningEffort'] : composition
+    assertReleasedV0Keys(data, ['mode', 'version', 'provider', 'label'], optional, `${label} data`)
   }
-  literalValue(data['mode'], ['continuable'], `${label} mode`)
-  nonEmptyString(data['label'], `${label} label`)
+  // Descriptor v1 and v2 writers defaulted each route member independently and did not reject empty strings.
+  const strict = data['version'] === 3
+  const stringField: (value: SessionFormatJsonValue | undefined, label: string) => void = strict ? nonEmptyString : stringValue
+  stringField(data['label'], `${label} label`)
   for (const key of ['agentProvider', 'agentModel', 'agentReasoningEffort', 'persona'] as const) {
-    if (data[key] !== undefined) nonEmptyString(data[key], `${label} ${key}`)
+    if (data[key] !== undefined) stringField(data[key], `${label} ${key}`)
   }
-  if ((data['agentProvider'] === undefined) !== (data['agentModel'] === undefined)) {
+  if (strict && (data['agentProvider'] === undefined) !== (data['agentModel'] === undefined)) {
     throw new SessionFormatError(`${label} agentProvider and agentModel must be paired`)
   }
   if (data['toolFilter'] !== undefined) {
@@ -939,8 +983,8 @@ function subagentDescriptorValue(data: JsonRecord, label: string): void {
     if (filter['allow'] === undefined && filter['deny'] === undefined) {
       throw new SessionFormatError(`${label} toolFilter requires allow or deny`)
     }
-    if (filter['allow'] !== undefined) arrayValue(filter['allow'], `${label} allow`, nonEmptyString)
-    if (filter['deny'] !== undefined) arrayValue(filter['deny'], `${label} deny`, nonEmptyString)
+    if (filter['allow'] !== undefined) arrayValue(filter['allow'], `${label} allow`, stringField)
+    if (filter['deny'] !== undefined) arrayValue(filter['deny'], `${label} deny`, stringField)
   }
 }
 

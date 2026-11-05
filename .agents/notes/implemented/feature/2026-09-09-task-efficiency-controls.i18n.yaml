@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-09-task-efficiency-controls.md
-2026-09-09-task-efficiency-controls.md: 5d1bfed574decb5185bb01018564f04441ba3e88
-2026-09-09-task-efficiency-controls.zh.md: 7f28233fe963d6b6844e405d0a869fc4e1890a19

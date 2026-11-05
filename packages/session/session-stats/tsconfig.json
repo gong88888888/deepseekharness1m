@@ -8,8 +8,6 @@
     "src"
   ],
   "references": [
-    { "path": "../../../vendor/schemastery" },
-    { "path": "../../core/tools" },
     {
       "path": "../../../vendor/cosmokit"
     },

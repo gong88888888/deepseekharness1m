@@ -1,39 +1,41 @@
 /**
  * The row an agent preset carries to pick its tool presentation. What it owes
  * its caller: the choice reaches THIS agent and no other, it unwinds with the
- * agent, and a code mode composed against a deployment with no code runtime
- * stops at mount — where a preset's activation audit can name it — rather
- * than at the first prompt assembly.
+ * agent, and PTC selection waits for a runtime before replacing the
+ * inherited executor.
  */
 
-import { describe, expect, it } from 'vitest'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import { describe, expect, it, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import { CodeRuntime } from '@deepseek-ai/dsh-code-runtime'
-import type { CodeRunRequest, CodeRunResult } from '@deepseek-ai/dsh-code-runtime'
+import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
+import type { PtcRunRequest, PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
 import ToolRuntime, { RUN_CODE_NAME, defineTool } from '@deepseek-ai/dsh-tools'
-import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
-import { ToolCallId, createToolResultMessage } from '@deepseek-ai/dsh-llm'
+import type { Agent } from '@deepseek-ai/dsh-agent'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import { apply, Config, inject, name } from '@deepseek-ai/dsh-agent-tool-presentation'
 
 /** A runtime that never runs anything: presentation never dispatches. */
-class StubRuntime extends CodeRuntime {
+class StubRuntime extends PtcRuntime {
+  resolve(request: import('@deepseek-ai/dsh-ptc-runtime').PtcRunRequest): import('@deepseek-ai/dsh-ptc-runtime').PtcRunSpec { return { ...request, cwd: request.cwd ?? process.cwd(), timeoutMs: request.timeoutMs ?? 120_000 } }
+
   readonly language = 'typescript'
   readonly isolation = 'stub'
 
-  run(_request: CodeRunRequest): Promise<CodeRunResult> {
+  run(_request: PtcRunRequest): Promise<PtcRunResult> {
     return Promise.resolve({ logs: [] })
   }
 }
 
-/** A host plane with one tool, optionally carrying a code runtime. */
+/** A host plane with one tool, optionally carrying a PTC runtime. */
 async function host(options: { runtime?: boolean } = {}) {
   const ctx = new Context()
+  onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(SystemPrompt, {})
-  await ctx.plugin(ToolRuntime, {})
-  await ctx.plugin(AgentRegistry)
+  await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   if (options.runtime !== false) await ctx.plugin(StubRuntime)
   ctx.tools.register(defineTool({
     name: 'echo',
@@ -46,51 +48,27 @@ async function host(options: { runtime?: boolean } = {}) {
 }
 
 /** Mount the row under one agent's scope, as a preset subtree does. */
+// oxlint-disable-next-line typescript/no-deprecated -- Exercise the supported compatibility plugin configuration.
 async function mount(ctx: Context, config: Config, id = 'agent') {
-  const agent = { id: SessionId(id), session: Session.create(SessionId(id)) } as Agent
-  ctx.agents.enter(agent, undefined)
+  const agent = { id: SessionId(id) } as Agent
   let inner!: Context
   const fiber = ctx.plugin(Object.assign((host: Context) => {
     inner = createScope(host, agent).ctx
-  }, { inject: ['tools', 'systemPrompt', 'agents'] }))
+  }, { inject: ['tools', 'systemPrompt'] }))
   await fiber.await()
   const row = inner.plugin({ name, inject: [...inject], Config, apply }, config)
   await row.await()
-  return { agent, fiber, row, inner }
+  return { agent, fiber, row }
 }
 
 describe('the tool-presentation row', () => {
-  it('loads tools only after a logged discovery result, and restores them from the log', async () => {
-    const ctx = await host()
-    const { agent, row, inner } = await mount(ctx, { mode: 'native', discovery: true })
-    expect((await ctx.systemPrompt.assemble({ scope: agent })).tools.map(tool => tool.name)).toEqual(['tool_discover'])
-    const callId = ToolCallId('discover-echo')
-    const result = await ctx.tools.execute({ agent, name: 'tool_discover', callId,
-      arguments: { query: 'echo' }, signal: new AbortController().signal })
-    expect(result.isError).not.toBe(true)
-    expect((await ctx.systemPrompt.assemble({ scope: agent })).tools.map(tool => tool.name)).toEqual(['tool_discover'])
-    agent.session.append('tool/call', { turn: 0, step: 0, callId, name: 'tool_discover', arguments: '{"query":"echo"}' })
-    agent.session.append('tool/result', { turn: 0, step: 0,
-      message: createToolResultMessage({ callId, content: result.content, isError: result.isError }),
-      meta: result.meta! }, { surfaceOp: 'append' })
-    expect((await ctx.systemPrompt.assemble({ scope: agent })).tools.map(tool => tool.name)).toEqual(['echo', 'tool_discover'])
-    expect((await ctx.systemPrompt.assemble({ scope: agent })).tools.map(tool => tool.name)).toEqual(['echo', 'tool_discover'])
-    await row.dispose()
-    expect((await ctx.systemPrompt.assemble({ scope: agent })).tools.map(tool => tool.name)).toEqual(['echo'])
-    await inner.plugin({ name, inject: [...inject], Config, apply }, { mode: 'native', discovery: true })
-    expect((await ctx.systemPrompt.assemble({ scope: agent })).tools.map(tool => tool.name)).toEqual(['echo', 'tool_discover'])
+  it('rejects an unsupported presentation mode in configuration', () => {
+    // oxlint-disable-next-line typescript/no-deprecated -- The compatibility schema must reject unsupported modes.
+    expect(() => Config({ mode: 'both' } as never)).toThrow()
   })
 
-  it('rejects unknown initial tools and unsupported presentation modes', async () => {
-    const ctx = await host()
-    const { agent } = await mount(ctx, { mode: 'native', discovery: true, initialTools: ['missing'] })
-    await expect(ctx.systemPrompt.assemble({ scope: agent })).rejects.toThrow(/unavailable/)
-    await expect(mount(ctx, { mode: 'ptc', discovery: true }, 'ptc-invalid')).rejects.toThrow(/native/)
-  })
-
-  it('declares the services it uses without holding a code runtime hostage', () => {
-    // A `native` row must mount where no runtime is composed, so the wait is
-    // conditional inside apply rather than static metadata.
+  it('declares the services it uses without holding a PTC runtime hostage', () => {
+    // Native execution does not require a program runtime.
     expect(inject).toEqual(['tools'])
   })
 
@@ -107,39 +85,24 @@ describe('the tool-presentation row', () => {
     expect(plainAssembly.tools.map(tool => tool.name)).toEqual(['echo'])
   })
 
-  it('presents both forms when asked for both', async () => {
-    const ctx = await host()
-    const { agent } = await mount(ctx, { mode: 'both' })
-
-    const assembly = await ctx.systemPrompt.assemble({ scope: agent })
-
-    expect(assembly.tools.map(tool => tool.name)).toEqual(['echo', RUN_CODE_NAME])
-  })
-
-  it('restores the deployment default when the agent unloads', async () => {
+  it('rejects the selected scope after its provider unloads', async () => {
     const ctx = await host()
     const { agent, row } = await mount(ctx, { mode: 'ptc' })
 
     await row.dispose()
 
-    // HMR safety: the preset subtree is torn down with its agent, and the
-    // presentation must go with it rather than outliving the composition.
-    const assembly = await ctx.systemPrompt.assemble({ scope: agent })
-    expect(assembly.tools.map(tool => tool.name)).toEqual(['echo'])
-    expect(assembly.sections.some(section => section.name === 'tools:sdk')).toBe(false)
+    await expect(ctx.systemPrompt.assemble({ scope: agent })).rejects.toThrow('selected tool executor is unavailable')
   })
 
-  it('waits for a code runtime the deployment does not compose', async () => {
+  it('keeps the inherited executor while waiting for a PTC runtime', async () => {
     const ctx = await host({ runtime: false })
 
     const { agent, row } = await mount(ctx, { mode: 'ptc' })
 
-    // Pending, not applied: `dsh-agent-presets` rejects a mount holding a row
-    // that never reached a usable state, naming this id — so the preset fails
-    // where the operator can act, instead of at the first request.
-    expect(row.ctx.get('codeRuntime')).toBeUndefined()
+    expect(row.ctx.get('ptcRuntime')).toBeUndefined()
     const assembly = await ctx.systemPrompt.assemble({ scope: agent })
     expect(assembly.tools.map(tool => tool.name)).toEqual(['echo'])
+    expect(assembly.sections.some(section => section.name === 'tools:sdk')).toBe(false)
   })
 
   it('applies once the runtime arrives', async () => {
@@ -155,6 +118,7 @@ describe('the tool-presentation row', () => {
   it('requires a mode rather than defaulting one', () => {
     // An omitted value would mean the row was composed for nothing: a preset
     // without this row already gets the deployment default.
+    // oxlint-disable-next-line typescript/no-deprecated -- The compatibility schema still requires an explicit mode.
     expect(() => Config({} as never)).toThrow()
   })
 })

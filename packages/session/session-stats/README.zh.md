@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-session-stats` 提供全日志会话数字——轮/步计数以及 LLM、工具、首 token、解码墙钟时间——以 `sessionStats` 投影单元的形式对外提供。客户端从注册表的快照与变更流中读取数字，且由于它们从完整持久日志折叠而来，分页或压缩都无法改变它们。在已挂载投影注册表的组合中选择它，例如 Web 聊天包（其统计条是参考消费者）；没有注册表的装配不受影响，其消费者回退到窗口口径计数。设置与字段语义在前；折叠内部细节放在下方可折叠的开发者章节中。
+本包通过公开的 `sessionStats` 值，为客户端提供全会话轮次与步骤计数，以及 LLM、工具、首 token 和解码墙钟时间。这些数字来自完整的持久日志，因此分页与压缩不会改变它们。当客户端必须在重新加载或缩减历史记录后显示一致的会话统计时，请使用本包。全会话统计不可用时，客户端可改用窗口口径计数。
 
 ## 目录
 
@@ -53,10 +53,6 @@ kind: "package-reference"
 没有投影注册表时单元是惰性的：`inject` 使 fiber 保持挂起，不注册任何内容，因此其他装配缺少 `sessionStats` 键。卸载插件会移除该键，因为注册是挂载 fiber 上的 effect。被崩溃打断的步在会话重新加载后计入，届时崩溃恢复补写合成的 `step/end`。
 
 -----
-
-### 效率控制
-
-`performanceLogging: true` 将本地 JSONL 计数写入必填的绝对路径 `performanceLogPath`。模型记录包括首次尝试的准备耗时、供应商迭代耗时、首 token 延迟、尝试次数、定义大小及可用 token 计数。工具记录分别测量调用到执行前的等待、执行前策略、执行、总耗时和输出字节。这些是扩展点之间的实测区间，不是单独的网络或操作系统进程启动耗时。缺失值为 null，不记录提示词、参数或结果正文。`performanceMaxPending` 和 `performanceMaxRecordBytes` 限制异步写入；过载计数、写入失败记录警告，卸载时等待队列完成。持久投影和模型请求保持原有内容。
 
 <a id="understand-the-implementation"></a>
 ## 理解实现
@@ -134,5 +130,3 @@ kind: "package-reference"
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。本包只有一个纯 projection fold，payload 每次都经 schema 校验；所依赖的 step、turn、chunk 与 tool event 关系由 agent-loop 和 session surface 检查。

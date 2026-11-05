@@ -3,7 +3,7 @@
  */
 
 import { z } from 'zod'
-import { expandAssistantStream, type TokenUsage } from '@deepseek-ai/dsh-llm'
+import { lastAssistantStreamChunk, type TokenUsage } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-llm-retry/types'
 import { SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
@@ -82,17 +82,7 @@ const pressureFrom = (usage: TokenUsage): number =>
 function usageOf(event: SessionEvent): TokenUsage | undefined {
   if (event.type === 'assistant/message' && event.data.usage !== undefined) return event.data.usage
   if (event.type !== 'assistant/message' && event.type !== 'assistant/attempt') return undefined
-  for (const member of expandAssistantStream(event.data.stream).toReversed()) {
-    if (member.chunk.type === 'usage') return member.chunk.usage
-  }
-  return undefined
-}
-
-declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    tokenUsage: TokenUsageState
-    contextPressure: ContextPressureState
-  }
+  return lastAssistantStreamChunk(event.data.stream, 'usage')?.usage
 }
 
 /** The context-pressure state schema and source of its inferred type. */
@@ -108,7 +98,8 @@ const contextPressureStateSchema = z.object({
   }).optional(),
 }).strict()
 
-type ContextPressureState = z.infer<typeof contextPressureStateSchema>
+/** Host fold state for provider pressure and surface adjustments. */
+export type ContextPressureState = z.infer<typeof contextPressureStateSchema>
 
 /**
  * Token-meter's session projection unit.
@@ -175,7 +166,7 @@ export const tokenUsageProjectionDefinition = {
  */
 export const contextPressureProjectionDefinition = {
   key: 'contextPressure',
-  stateVersion: 4,
+  stateVersion: 5,
   stateSchema: contextPressureStateSchema,
   init: () => ({ surfaceTokens: 0 }),
   apply: (state, event) => {
@@ -217,5 +208,6 @@ export const contextPressureProjectionDefinition = {
         ? {}
         : { projectedTokens: Math.max(0, pressureTokens + surfaceTokens - sampledSurfaceTokens) },
     }),
+    summary: false,
   },
 } satisfies ProjectionDefinition<'contextPressure', ContextPressureState>

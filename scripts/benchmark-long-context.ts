@@ -10,7 +10,8 @@ import { Session, SessionId, canonicalHeader } from '@deepseek-ai/dsh-session'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
-import { serializeRequest } from '../packages/llm/llm-deepseek/src/serialize.ts'
+import { resolveAdapterOptions } from '../packages/llm/llm-deepseek/src/config.ts'
+import { serialize } from '../packages/llm/llm-deepseek/src/serialize.ts'
 
 const [tokensArg = '1000000', nodesArg = '2000', textKind = 'code'] = process.argv.slice(2)
 const targetTokens = Number(tokensArg)
@@ -27,7 +28,9 @@ const characters = Math.floor((targetTokens / nodes - 8) * 4)
 const text = pattern.repeat(Math.ceil(characters / pattern.length)).slice(0, characters)
 const ctx = new Context()
 new SessionProjectionRegistry(ctx)
-const meter = new TokenMeter(ctx)
+await ctx.plugin(TokenMeter)
+const meter = ctx.tokenMeter
+const connection = resolveAdapterOptions({})
 const session = Session.create(SessionId('benchmark-long-context'))
 session.append('request/header', { reason: 'initial', header: canonicalHeader({ config: { provider: 'benchmark', model: 'text' } }) })
 for (let index = 0; index < nodes; index++) {
@@ -55,7 +58,13 @@ try {
     const metered = performance.now()
     const messages = session.deriveMessages()
     const projected = performance.now()
-    const payload = JSON.stringify(serializeRequest({ provider: 'benchmark', model: 'text', messages }))
+    const payload = JSON.stringify(serialize(
+      { provider: 'deepseek-official', model: 'deepseek-v4-flash', messages },
+      connection,
+      messages,
+      new Map(),
+      () => undefined,
+    ))
     const serialized = performance.now()
     requestBytes = Buffer.byteLength(payload)
     const memory = process.memoryUsage()
@@ -80,4 +89,5 @@ try {
   }, null, 2))
 } finally {
   delay.disable()
+  await ctx.fiber.dispose()
 }

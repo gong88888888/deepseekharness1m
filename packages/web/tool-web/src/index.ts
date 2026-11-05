@@ -2,14 +2,16 @@
  * Model-facing `web_search` and `web_fetch` tools over `ctx.web`. This package owns schemas,
  * validation, prompt guidance, limits, and presentation, never concrete providers. Enablement
  * controls tool registration; an enabled tool remains visible when its provider is unavailable
- * and fails with a structured error at execution time.
+ * and fails with a structured error at execution time. A model step does not admit
+ * `web_search` or `web_fetch` while `ctx.web.searchReady()` or `ctx.web.fetchReady()`
+ * reports that the selected provider cannot authenticate for that step's chat route.
  * @module @deepseek-ai/dsh-tool-web
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-web'
-import { applyWebSearchTool, WEB_SEARCH_MAX_QUERIES, WEB_SEARCH_MAX_RESULTS } from './search.ts'
+import { applyWebSearchTool, WEB_SEARCH_MAX_QUERIES, WEB_SEARCH_MAX_RESULTS, WEB_SEARCH_SUMMARY_MAX_CHARS } from './search.ts'
 import { applyWebFetchTool } from './fetch.ts'
 
 export { WEB_SEARCH_MAX_QUERIES, WEB_SEARCH_MAX_RESULTS, applyWebSearchTool, formatSearchOutput, presentSearchCall, presentSearchResult, searchMetaFromValue, searchMetaFromResult } from './search.ts'
@@ -35,26 +37,16 @@ export const DEFAULT_FETCH_MAX_OUTPUT_CHARS = 200_000
 
 /** Plugin config: which web tools to register, search bounds, per-tool budgets, and the fetch output cap. */
 export interface Config {
-  /** Reuse identical normalized query batches within a caller-local TTL. Defaults to false. */
-  searchCache?: boolean
-  /** Enable caller-local cached Markdown windows for web_fetch. Defaults to false. */
-  fetchContext?: boolean
-  /** Maximum Markdown characters in a fetch window. Defaults to 12000. */
-  fetchContextChars?: number
-  /** Maximum cached results per caller and tool. Defaults to 16. */
-  cacheEntries?: number
-  /** Maximum retained UTF-8 bytes per caller and tool. Defaults to 1000000. */
-  cacheBytes?: number
-  /** Result reuse lifetime in milliseconds. Defaults to 60000. */
-  cacheTtlMs?: number
   /** Register `web_search`. Defaults to true. */
   search?: boolean
   /** Register `web_fetch`. Defaults to true. */
   fetch?: boolean
-  /** Upper bound on sources returned by one `web_search` call. */
+  /** Upper bound on sources returned by one `web_search` call. Defaults to 10. */
   searchMaxResults?: number
-  /** Upper bound on queries accepted by one `web_search` call. */
+  /** Upper bound on queries accepted by one `web_search` call. Defaults to 10. */
   searchMaxQueries?: number
+  /** Cap on each source summary in `web_search` output, in characters. Defaults to 800. */
+  searchSummaryMaxChars?: number
   /** Cooperative timeout budget (ms) for `web_fetch`. Defaults to 30000. */
   fetchTimeoutMs?: number
   /** Cooperative timeout budget (ms) for `web_search`. Defaults to 30000. */
@@ -64,16 +56,11 @@ export interface Config {
 }
 
 export const Config: z<Config> = z.object({
-  searchCache: z.boolean().default(false),
-  fetchContext: z.boolean().default(false),
-  fetchContextChars: z.number().default(12000),
-  cacheEntries: z.number().default(16),
-  cacheBytes: z.number().default(1_000_000),
-  cacheTtlMs: z.number().default(60_000),
   search: z.boolean().default(true),
   fetch: z.boolean().default(true),
   searchMaxResults: z.number().default(WEB_SEARCH_MAX_RESULTS),
   searchMaxQueries: z.number().default(WEB_SEARCH_MAX_QUERIES),
+  searchSummaryMaxChars: z.number().default(WEB_SEARCH_SUMMARY_MAX_CHARS),
   fetchTimeoutMs: z.number().default(DEFAULT_WEB_TOOL_TIMEOUT_MS),
   searchTimeoutMs: z.number().default(DEFAULT_WEB_TOOL_TIMEOUT_MS),
   fetchMaxOutputChars: z.number().default(DEFAULT_FETCH_MAX_OUTPUT_CHARS),
@@ -101,20 +88,16 @@ function assertPositiveInteger(name: string, value: number): void {
 export function apply(ctx: Context, config: Config): void {
   // schemastery (Config) has already filled every defaulted field.
   const resolved = config as ResolvedConfig
-  assertPositiveInteger('fetchContextChars', resolved.fetchContextChars)
-  assertPositiveInteger('cacheEntries', resolved.cacheEntries)
-  assertPositiveInteger('cacheBytes', resolved.cacheBytes)
-  assertPositiveInteger('cacheTtlMs', resolved.cacheTtlMs)
   assertPositiveInteger('searchMaxResults', resolved.searchMaxResults)
   assertPositiveInteger('searchMaxQueries', resolved.searchMaxQueries)
+  assertPositiveInteger('searchSummaryMaxChars', resolved.searchSummaryMaxChars)
   assertPositiveInteger('fetchTimeoutMs', resolved.fetchTimeoutMs)
   assertPositiveInteger('searchTimeoutMs', resolved.searchTimeoutMs)
   assertPositiveInteger('fetchMaxOutputChars', resolved.fetchMaxOutputChars)
   if (resolved.search) {
-    applyWebSearchTool(ctx, resolved.searchMaxResults, resolved.searchMaxQueries, resolved.searchTimeoutMs, resolved.fetch,
-      resolved.searchCache ? { entries: resolved.cacheEntries, bytes: resolved.cacheBytes, ttlMs: resolved.cacheTtlMs } : undefined)
+    applyWebSearchTool(
+      ctx, resolved.searchMaxResults, resolved.searchMaxQueries, resolved.searchSummaryMaxChars, resolved.searchTimeoutMs, resolved.fetch,
+    )
   }
-  if (resolved.fetch) applyWebFetchTool(ctx, resolved.fetchTimeoutMs, resolved.fetchMaxOutputChars,
-    resolved.fetchContext ? { chars: resolved.fetchContextChars,
-      cache: { entries: resolved.cacheEntries, bytes: resolved.cacheBytes, ttlMs: resolved.cacheTtlMs } } : undefined)
+  if (resolved.fetch) applyWebFetchTool(ctx, resolved.fetchTimeoutMs, resolved.fetchMaxOutputChars)
 }

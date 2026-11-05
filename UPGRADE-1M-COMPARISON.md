@@ -25,3 +25,9 @@
 ## 仍需融合的旧版特性
 
 旧版 135 个改动路径中有 42 个在新上游不存在，包括工具发现、Web 结果缓存、任务效率快照、工作流 worker 和旧快照布局。这些文件不能直接覆盖到新架构。候选采用上游的 1M 核心实现；是否移植这些独立效率功能，需要按新扩展点逐项实现和验证。旧版 `portable` 分支保持可用。
+
+## 本机实装
+
+2026-11-05，使用目录 `F:\dsh1m-verify-r2-20260914` 已切至 `codex/upgrade-1m-0.2.2-rc.1`；旧实现保留在 `portable` 分支。按新版锁文件重装依赖、清理旧产物并完成 `build:artifacts` 的 8 个步骤后，真实 Web profile 启动时无跳过或未激活条目，端口 3000 的首页返回 HTTP 200。后台 Web 进程已启动；重启机器后可在该目录运行 `pnpm dsh web`。
+
+启动前已把 `~/.dsh` 的配置、会话和附件备份到 `C:\Users\ASUS\.dsh-upgrade-backup-20261105`，未复制可重装的插件依赖。Web profile 的 DeepSeek 密钥字段已改为 `DEEPSEEK_API_KEY` 凭据引用；默认模型仍为原配置的 Qwen，DeepSeek 的 1M 模型作为可选路由保留。已升级兼容的第三方插件，并从启用列表移除新版无法运行的 `dsh-find-plugin`、`dsh-at-file` 和 `dsh-mnemon`；旧版 `session-stats` 性能日志配置也已移除，当前统计由新版投影提供。完整旧配置保留在上述备份。
